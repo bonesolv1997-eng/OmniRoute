@@ -28,7 +28,8 @@ em algum sítio**: limite do Steam, QoS do router, software de fabricante, ou um
    "a net ficou má" sem ninguém mexer em nada.
 2. **Fecha tudo o que use rede**: BT/torrents, OneDrive/Google Drive, Xbox app, Epic,
    backups, streaming 4K, VPN, clientes de email pesados.
-3. **Corre o diagnóstico deste kit** (não altera nada, só mede):
+3. **Corre o diagnóstico deste kit** (não altera nada, só mede). Se ainda não tens os
+   ficheiros no PC, começa por descarregar o kit inteiro com o `baixar-kit.ps1` (secção 1b):
 
 ```powershell
 # Windows (na pasta deste ficheiro)
@@ -80,6 +81,28 @@ Este passo de 30 segundos identifica a maioria dos casos sozinho.
 | `Não é possível carregar o ficheiro ... porque está numa unidade de rede/OneDrive` | PowerShell bloqueia scripts em algumas localizações sincronizadas | Copia a pasta para `C:\Temp` e corre a partir daí |
 | Erros de sintaxe ou acentos trocados (`Ã©`, `â€”`) | Ficheiro guardado noutra codificação | Usa a versão do repositório (**já está gravada com BOM UTF-8**, que o PowerShell 5.1 lê bem). Se editaste o ficheiro, guarda como *UTF-8 com BOM*. |
 | `powershell : O termo 'powershell' não é reconhecido` | A correr dentro do próprio PowerShell ou num CMD sem PATH | `Get-Command powershell` para confirmar; no PowerShell basta `.\diagnostico-net-lenta.ps1` (sem a palavra `powershell` à frente) |
+| `The argument '.\desligar-poupanca-wifi.ps1' to the -File parameter does not exist` | Esse **ficheiro ainda não existe no teu PC** (só descarregaste o `diagnostico-net-lenta.ps1`), ou estás noutra pasta | Descarrega o kit completo (bloco abaixo) ou o ficheiro: troca o nome no URL do `raw.githubusercontent.com` e volta a correr |
+
+**Descarregar o kit completo (7 ficheiros, um comando)** — deixa tudo na pasta
+`Downloads\omniroute-net-kit`, já desbloqueado, e imprime os comandos exatos:
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$b = "$env:TEMP\baixar-kit.ps1"
+Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/bonesolv1997-eng/OmniRoute/arena/01a0aae0-omniroute/docs/help/pt-PT/baixar-kit.ps1' -OutFile $b
+Unblock-File $b
+& $b
+```
+
+Depois disso, **os três scripts estão todos na mesma pasta** e os comandos desta
+documentação funcionam tal e qual (depois de um `cd` para essa pasta):
+
+```powershell
+cd "$env:USERPROFILE\Downloads\omniroute-net-kit"
+powershell -ExecutionPolicy Bypass -File .\diagnostico-net-lenta.ps1
+powershell -ExecutionPolicy Bypass -File .\medir-velocidade.ps1
+powershell -ExecutionPolicy Bypass -File .\desligar-poupanca-wifi.ps1
+```
 
 **Copiaste o comando com as crases (` ``` `) do chat?** Isso dá exatamente "não é reconhecido".
 Copia **só** a linha: `powershell -ExecutionPolicy Bypass -File .\diagnostico-net-lenta.ps1`
