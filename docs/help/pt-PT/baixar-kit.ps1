@@ -18,6 +18,8 @@ $ProgressPreference = 'SilentlyContinue'
 
 $BASE = 'https://raw.githubusercontent.com/bonesolv1997-eng/OmniRoute/arena/01a0aae0-omniroute/docs/help/pt-PT'
 $ficheiros = @(
+    'kit.ps1',
+    'kit.cmd',
     'diagnostico-net-lenta.ps1',
     'medir-velocidade.ps1',
     'desligar-poupanca-wifi.ps1',

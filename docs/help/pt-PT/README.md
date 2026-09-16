@@ -28,8 +28,25 @@ em algum sítio**: limite do Steam, QoS do router, software de fabricante, ou um
    "a net ficou má" sem ninguém mexer em nada.
 2. **Fecha tudo o que use rede**: BT/torrents, OneDrive/Google Drive, Xbox app, Epic,
    backups, streaming 4K, VPN, clientes de email pesados.
-3. **Corre o diagnóstico deste kit** (não altera nada, só mede). Se ainda não tens os
-   ficheiros no PC, começa por descarregar o kit inteiro com o `baixar-kit.ps1` (secção 1b):
+3. **Corre o kit** — de uma destas duas formas. Não precisas de ter ficheiros no PC nem de
+   saber em que pasta estás (o comando descarrega para `%TEMP%` e usa o caminho absoluto,
+   por isso o erro "não existe" não acontece):
+
+   **a) PowerShell (copia as 4 linhas e cola):**
+
+   ```powershell
+   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+   $k = "$env:TEMP\kit.ps1"
+   Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/bonesolv1997-eng/OmniRoute/arena/01a0aae0-omniroute/docs/help/pt-PT/kit.ps1' -OutFile $k
+   Unblock-File $k; & $k
+   ```
+
+   Abre um **menu**: 1) diagnóstico completo, 2) teste de velocidade, 3) Wi-Fi (ver),
+   4) Wi-Fi (aplicar — abre ele próprio a janela de administrador), 5) reverter, 6) atualizar
+   ficheiros, 7) abrir este guia.
+
+   **b) Duplo clique:** guarda o **`kit.cmd`** (botão *Download raw file*) e faz duplo clique
+   nele — faz o mesmo que (a):
 
 ```powershell
 # Windows (na pasta deste ficheiro)
@@ -67,9 +84,30 @@ Este passo de 30 segundos identifica a maioria dos casos sozinho.
 
 ## 1b. Se o script "não der" — os 6 motivos habituais
 
-**Caminho mais fácil (Windows):** em vez de escreveres o comando, descarrega a pasta inteira
-`docs/help/pt-PT` do branch `arena/01a0aae0-omniroute` e **faz duplo clique em
-`correr-diagnostico.cmd`**. Esse lançador: muda para a pasta correta, desbloqueia o ficheiro
+> ### 🚨 Regra de ouro: esquece os comandos com `.\nome.ps1`
+>
+> Em PowerShell, `.\` significa **"nesta pasta"** (a pasta onde a janela está aberta). Um
+> ficheiro que esteja em `%TEMP%` ou em `Downloads` **não é encontrado**, e o erro que aparece é:
+> `The argument '.\medir-velocidade.ps1' to the -File parameter does not exist`.
+>
+> Nesse caso: faz `cd` para a pasta onde o ficheiro está (`cd $env:TEMP`), **ou** — melhor — usa
+> sempre um caminho **absoluto**, que funciona de qualquer pasta:
+>
+> | Objetivo | Comando (cola tal e qual) |
+> |---|---|
+> | **Menu do kit** (tudo) | as 4 linhas do ponto 3, ou duplo clique no `kit.cmd` |
+> | Diagnóstico completo | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\diagnostico-net-lenta.ps1"` |
+> | Teste de velocidade | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\medir-velocidade.ps1"` |
+> | Wi-Fi (só ver) | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\desligar-poupanca-wifi.ps1"` |
+> | Wi-Fi (aplicar) | abrir PowerShell **como administrador** e correr a linha anterior com `-Aplicar` no fim |
+>
+> Os caminhos acima são **absolutos** (`$env:TEMP\...`) e não têm `.\`: é isso que os torna à
+> prova de "não existe". Se o ficheiro ainda não estiver lá, usa primeiro o `baixar-kit.ps1`
+> (bloco mais abaixo) ou o menu do kit.
+
+**Caminho mais fácil (Windows):** guarda o **`kit.cmd`** (ou a pasta inteira `docs/help/pt-PT`
+do branch `arena/01a0aae0-omniroute`) e **faz duplo clique nele** — abre o menu com todas as
+opções. Esse lançador: muda para a pasta correta, desbloqueia o ficheiro
 (se vier da Internet fica bloqueado), descarrega-o sozinho se não estiver lá, corre com
 `-NoProfile` e `-ExecutionPolicy Bypass`, e **não fecha a janela no fim**.
 
@@ -81,7 +119,7 @@ Este passo de 30 segundos identifica a maioria dos casos sozinho.
 | `Não é possível carregar o ficheiro ... porque está numa unidade de rede/OneDrive` | PowerShell bloqueia scripts em algumas localizações sincronizadas | Copia a pasta para `C:\Temp` e corre a partir daí |
 | Erros de sintaxe ou acentos trocados (`Ã©`, `â€”`) | Ficheiro guardado noutra codificação | Usa a versão do repositório (**já está gravada com BOM UTF-8**, que o PowerShell 5.1 lê bem). Se editaste o ficheiro, guarda como *UTF-8 com BOM*. |
 | `powershell : O termo 'powershell' não é reconhecido` | A correr dentro do próprio PowerShell ou num CMD sem PATH | `Get-Command powershell` para confirmar; no PowerShell basta `.\diagnostico-net-lenta.ps1` (sem a palavra `powershell` à frente) |
-| `The argument '.\desligar-poupanca-wifi.ps1' to the -File parameter does not exist` | Esse **ficheiro ainda não existe no teu PC** (só descarregaste o `diagnostico-net-lenta.ps1`), ou estás noutra pasta | Descarrega o kit completo (bloco abaixo) ou o ficheiro: troca o nome no URL do `raw.githubusercontent.com` e volta a correr |
+| `The argument '.\desligar-poupanca-wifi.ps1' ... does not exist`<br>(idem para `medir-velocidade.ps1`, `diagnostico-net-lenta.ps1`) | O ficheiro **não está na pasta atual** — ou ainda não foi descarregado, ou está em `%TEMP%`/`Downloads` e o comando procura em `.\` | Usa o **menu do kit** (`kit.cmd`, ou as 4 linhas do ponto 3) ou os caminhos **absolutos** da tabela da Regra de ouro, acima |
 
 **Descarregar o kit completo (7 ficheiros, um comando)** — deixa tudo na pasta
 `Downloads\omniroute-net-kit`, já desbloqueado, e imprime os comandos exatos:
