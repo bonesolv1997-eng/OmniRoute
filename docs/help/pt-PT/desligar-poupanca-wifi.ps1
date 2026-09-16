@@ -1,3 +1,4 @@
+# KIT-VERSION: 2026.09.16.5 (ASCII)
 <#
     desligar-poupanca-wifi.ps1 - Wi-Fi: ver o chip/driver, e desligar a poupanca de energia
     --------------------------------------------------------------------------------------
@@ -14,7 +15,6 @@
 
     Nota: depois de aplicar, o Wi-Fi reinicia (~5 s sem ligacao). E normal.
 #>
-# KIT-VERSION: 2026.09.16.4 (ASCII)
 
 [CmdletBinding()]
 param([switch]$Aplicar, [switch]$Reverter)

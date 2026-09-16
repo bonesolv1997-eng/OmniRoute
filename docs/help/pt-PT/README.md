@@ -123,7 +123,7 @@ Remove-Item $f -Force -ErrorAction SilentlyContinue
 $u = 'https://raw.githubusercontent.com/bonesolv1997-eng/OmniRoute/arena/01a0aae0-omniroute/docs/help/pt-PT/medir-velocidade.ps1?cb=' + [guid]::NewGuid().ToString('N')
 try { Invoke-WebRequest -UseBasicParsing -Uri ($u + '?cb=' + [guid]::NewGuid().ToString('N')) -OutFile $f }
 catch { Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $f }   # fallback sem cache-busting
-if ((Get-Content $f -Raw) -match 'KIT-VERSION: 2026\.09\.16\.4') {
+if ((Get-Content $f -Raw) -match 'KIT-VERSION: 2026\.09\.16\.5') {
     Unblock-File $f; & $f
 } else {
     Write-Host "Recebi uma copia ANTIGA (cache do CDN). Espera 5 minutos e repete o comando." -ForegroundColor Yellow
@@ -272,6 +272,49 @@ curl.exe -v -o NUL --max-time 15 "https://speed.cloudflare.com/__down?bytes=2000
 `SSL certificate problem` / `schannel` nessa saída = **inspeção HTTPS ativa** (antivírus com
 inspeção TLS ou Traffic Inspector do OmniRoute — secção 8). É uma das poucas coisas que
 bloqueia downloads grandes sem tocar na latência.
+
+---
+
+### Metade da linha: o que significa medir 300-700 Mbps numa linha de 1 Gbps
+
+Caso real deste kit: **361,7 Mbps (Cachefly, 100 MB)** e 166,5 Mbps (OVH) por **cabo**,
+link negociado a 1 Gbps, latência 24 ms, bufferbloat 0 ms. Isto não é "linha estragada" nem
+"Wi-Fi fraco" — é um **teto de ~360 Mbps** que tem quatro candidatos:
+
+| Candidato | Como confirmar | Como resolver |
+|---|---|---|
+| **Router/QoS do ISP** (NAT/firewall a ~300-400 Mbps, perfis de jogo, "boost") | Compara com o **speedtest do próprio ISP** e com outro equipamento; desliga QoS/boost e repete | Desativar QoS/"game boost"/firewall extra, ou trocar para modo bridge com router próprio |
+| **Realtek (RTL8168/8111)** com `Gigabit Lite`/`Green Ethernet`/driver antigo | `Get-NetAdapter \| Format-Table Name, LinkSpeed, DriverVersion, DriverDate` | Secção 4b-bis: tudo a **Disabled**, driver do fabricante da board |
+| **Uma só conexão TCP** limitada (CPU, antivírus com inspeção HTTPS, autotuning, MTU) | **Teste multi-stream** (opção abaixo) | Desligar inspeção HTTPS, `netsh int tcp set global autotuninglevel=normal`, verificar MTU |
+| **Servidor de teste** (peering/CDN limitado) | Repetir com várias fontes e em horas diferentes | Usar o speedtest do ISP como referência da linha |
+
+**O teste que separa "por conexão" de "do caminho"** (já incluído no `medir-velocidade.ps1`
+v3): mede 1 stream e depois **4 streams em paralelo**, e compara.
+
+```powershell
+$d = "$env:TEMP\omniroute-kit"; New-Item -ItemType Directory -Path $d -Force | Out-Null
+$f = "$d\medir-velocidade.ps1"
+Remove-Item $f -Force -ErrorAction SilentlyContinue
+$u = 'https://raw.githubusercontent.com/bonesolv1997-eng/OmniRoute/arena/01a0aae0-omniroute/docs/help/pt-PT/medir-velocidade.ps1'
+try { Invoke-WebRequest -UseBasicParsing -Uri ($u + '?cb=' + [guid]::NewGuid().ToString('N')) -OutFile $f }
+catch { Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $f }
+if ((Get-Content $f -Raw) -match 'KIT-VERSION: 2026\.09\.16\.5') { Unblock-File $f; & $f }
+else { Write-Host "Copia antiga em cache - espera 5 min e repete." -ForegroundColor Yellow }
+```
+
+Como ler:
+
+| Observação | Conclusão |
+|---|---|
+| Multi-stream **≥ 1,5x** o single stream | Limite **por conexão** (CPU/antivírus/TCP), não da linha. O Steam usa vários streams — por isso não verás este teto nos downloads do Steam |
+| Multi-stream **≈ single** (≤ 1,2x) | Limite **do caminho**: router/QoS/ISP, ou porta/NIC do PC → seções seguintes |
+| Parciais muito baixas (ex.: `>= 8 Mbps` num servidor) | Aquele **servidor** está lento — não conta para o veredito (o script marca `PARCIAL` e ignora) |
+| `HTTP 403` numa fonte | O CDN bloqueia o cliente: já corrigido com **user-agent de browser** no v3 |
+| `HTTP 404` numa fonte | URL da fonte mudou: Leaseweb removida no v3 |
+| `100 MB em 0 s` | Era **bug de leitura** (decimais `2,2` lidos com cultura pt-PT); corrigido no v3 com `InvariantCulture` |
+
+> Nota: `>= X Mbps` significa "pelo menos", porque a transferência foi cortada pelo limite de
+> tempo do teste. É informação, não veredito.
 
 ---
 
@@ -796,7 +839,7 @@ Depois:
 | Speedtest CLI (`speedtest -s <id do servidor>`) | Comparar com o servidor do operador |
 | `curl -o NUL https://proof.ovh.net/files/100Mb.dat` | Teste de 100 MB sem interface web (Hetzner falha em muitas redes) |
 | Cloudflare Speed Test / Waveform Bufferbloat | Latência sob carga (bufferbloat) |
-| `medir-velocidade.ps1` (deste kit) | A/B rápido: interface + latência + velocidade em 30 s |
+| `medir-velocidade.ps1` v3 (deste kit) | Interface + latência + 6 fontes validadas + **multi-stream** + bufferbloat |
 | `verificar-kit.sh` (deste kit) | Verifica BOM UTF-8, caracteres de risco, CRLF dos `.cmd` e sintaxe dos `.sh` |
 | CrystalDiskInfo / `smartctl` | Saúde e velocidade do disco |
 | Intel Driver & Support Assistant (DSA) | Deteta e atualiza driver da NIC Intel |
@@ -835,6 +878,17 @@ Terceiro relatório (erro de sintaxe ao correr `medir-velocidade.ps1`):
 | Observação | Leitura | Ação |
 |---|---|---|
 | `Unexpected token '€" * 72))'`, `Missing closing ')'`, `â”€`, `Â·` | Duas causas somadas: (1) a reescrita do script perdeu o **BOM UTF-8** e (2) ao re-descarregar, o **CDN do GitHub ainda servia a cópia antiga** (cache de até ~5 min) | Corrigido de raiz: **`.ps1` em ASCII puro** (faz parse com/sem BOM, em UTF-8 ou CP1252) + **cache-busting** nos downloads + **verificação do `KIT-VERSION`** antes de correr + `verificar-kit.sh` que falha se a regra for quebrada |
+
+Quarto relatório (medição válida, por cabo):
+
+| Observação | Leitura | Ação |
+|---|---|---|
+| **Cachefly 361,7 Mbps** (100 MB) e OVH 166,5 Mbps, por cabo, link 1 Gbps | A linha entrega **~36 %** do plano — não é Wi-Fi nem Steam | Teste multi-stream + router/QoS + Realtek (abaixo) |
+| Latência 22/24/31 ms e **bufferbloat +0 ms** sob carga | Latência e filas de saída saudáveis | Não é bufferbloat |
+| Cloudflare `HTTP 403` | CDN bloqueou o cliente curl | Corrigido: **user-agent de browser** no kit v3 |
+| Leaseweb `HTTP 404` | URL da fonte morta | Removida no v3 (entraram ThinkBB e Hetzner-FS) |
+| Tele2 `só 15 MB` | Servidor limitado/truncou | Reportado como `PARCIAL` e excluído do veredito |
+| `100 MB em 0 s` | Bug: decimais do curl (`2,2`) lidos com cultura pt-PT falhavam | Corrigido com `InvariantCulture` no v3 |
 
 Sequência de resolução (o que fazer por esta ordem): **limite do Steam → desligar a Wi-Fi e
 medir por cabo → Green Ethernet/Gigabit Lite off + driver Wi-Fi atualizado → trocar cabo/porta

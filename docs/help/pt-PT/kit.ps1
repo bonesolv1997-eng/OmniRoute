@@ -1,3 +1,4 @@
+# KIT-VERSION: 2026.09.16.5 (ASCII)
 <#
     kit.ps1 - ponto de entrada UNICO do kit de diagnostico de rede (PT-PT).
 
@@ -21,7 +22,6 @@
         janela elevada, nao tens de fazer nada;
       - nao altera nada do sistema nas opcoes 1, 2, 3, 6 e 7.
 #>
-# KIT-VERSION: 2026.09.16.4 (ASCII)
 
 [CmdletBinding()]
 param(

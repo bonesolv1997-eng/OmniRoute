@@ -1,3 +1,4 @@
+# KIT-VERSION: 2026.09.16.5 (ASCII)
 <#
     baixar-kit.ps1 - descarrega TODOS os scripts deste kit para uma pasta e deixa tudo pronto.
 
@@ -9,7 +10,6 @@
     No fim, o script imprime os comandos exatos para cada ferramenta - a partir da pasta
     onde os ficheiros ficam, os comandos funcionam sempre.
 #>
-# KIT-VERSION: 2026.09.16.4 (ASCII)
 
 [CmdletBinding()]
 param([string]$Destino)

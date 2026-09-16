@@ -1,3 +1,4 @@
+# KIT-VERSION: 2026.09.16.5 (ASCII)
 <#
     teste-ab-wifi.ps1 - compara a velocidade COM Wi-Fi e SEM Wi-Fi (por cabo),
                          na mesma sessao, sem tu teres de mexer em nada.
@@ -17,7 +18,6 @@
 
     Precisa de administrador (para desligar/ligar o adaptador). O script eleva-se sozinho.
 #>
-# KIT-VERSION: 2026.09.16.4 (ASCII)
 
 [CmdletBinding()]
 param([int]$MB = 100)
@@ -64,6 +64,22 @@ function Mostrar-Interfaces {
     return $ifs[0]
 }
 
+# user-agent de browser: varios CDNs respondem HTTP 403 ao curl sem isto.
+$script:UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+
+# Numeros do curl vem com ponto decimal; ler com cultura pt-PT falha (dava "0 s").
+function ConvertTo-Numero([string]$texto) {
+    if (-not $texto) { return $null }
+    $t = $texto.Trim()
+    $n = [double]0
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    $estilo = [System.Globalization.NumberStyles]::Float
+    if ([double]::TryParse($t, $estilo, $inv, [ref]$n)) { return $n }
+    $t2 = $t -replace ',', '.'
+    if ([double]::TryParse($t2, $estilo, $inv, [ref]$n)) { return $n }
+    return $null
+}
+
 # -- Motor de medicao com VALIDACAO -----------------------------------------
 #  Uma medicao so conta se: HTTP 200 E pelo menos 20 MB transferidos.
 #  Ficheiros pequenos (o SteamSetup.exe tem ~2,3 MB) davam numeros falsos.
@@ -74,7 +90,8 @@ $Fontes = @(
     @{ Nome = 'OVH (Franca)'; Url = 'https://proof.ovh.net/files/100Mb.dat' },
     @{ Nome = 'Tele2 (HTTP)'; Url = 'http://speedtest.tele2.net/100MB.zip' },
     @{ Nome = 'Cachefly (HTTP)'; Url = 'http://cachefly.cachefly.net/100mb.test' },
-    @{ Nome = 'Leaseweb (NL)'; Url = 'https://mirror.leaseweb.com/speedtest/100mb.bin' }
+    @{ Nome = 'ThinkBB (UK)'; Url = 'https://ipv4.download.thinkbroadband.com/100MB.zip' },
+    @{ Nome = 'Hetzner (FS)'; Url = 'https://fsn1-speed.hetzner.com/100MB.bin' }
 )
 
 function Invoke-FonteSpeed([string]$nome, [string]$url, [string]$curl, [int]$maxSeg = $MAX_SEGUNDOS) {
@@ -99,16 +116,17 @@ function Invoke-FonteSpeed([string]$nome, [string]$url, [string]$curl, [int]$max
         return [pscustomobject]@{ Nome = $nome; Valido = $false; Motivo = $motivo; Mbps = 0; MB = [math]::Round($bytes / 1MB, 1); Seg = $seg }
     }
 
-    $raw = & $curl -s -L -o NUL --connect-timeout 8 --max-time $maxSeg -w '%{http_code}|%{size_download}|%{speed_download}|%{time_total}' $url 2>$null
+    $raw = & $curl -s -L -A $script:UA -o NUL --connect-timeout 8 --max-time $maxSeg -w '%{http_code}|%{size_download}|%{speed_download}|%{time_total}' $url 2>$null
     $partes = (($raw | Out-String).Trim()) -split '\|'
     if ($partes.Count -lt 4) {
         return [pscustomobject]@{ Nome = $nome; Valido = $false; Motivo = 'sem resposta do curl'; Mbps = 0; MB = 0; Seg = 0 }
     }
-    $http = 0; $bytes = 0L; $bps = 0.0; $seg = 0.0
-    [void][int]::TryParse($partes[0].Trim(), [ref]$http)
-    [void][int64]::TryParse($partes[1].Trim(), [ref]$bytes)
-    [void][double]::TryParse($partes[2].Trim(), [ref]$bps)
-    [void][double]::TryParse($partes[3].Trim(), [ref]$seg)
+    $httpN = ConvertTo-Numero $partes[0]; $bytesN = ConvertTo-Numero $partes[1]
+    $bpsN = ConvertTo-Numero $partes[2]; $segN = ConvertTo-Numero $partes[3]
+    $http = if ($httpN) { [int]$httpN } else { 0 }
+    $bytes = if ($bytesN) { [int64]$bytesN } else { [int64]0 }
+    $bps = if ($bpsN) { [double]$bpsN } else { [double]0 }
+    $seg = if ($segN) { [double]$segN } else { [double]0 }
     $mb = [math]::Round($bytes / 1MB, 1)
     if ($http -ne 200) { return [pscustomobject]@{ Nome = $nome; Valido = $false; Motivo = ('HTTP ' + $http); Mbps = 0; MB = $mb; Seg = $seg } }
     if ($bytes -lt $MIN_BYTES_VALIDO) { return [pscustomobject]@{ Nome = $nome; Valido = $false; Motivo = ('so ' + $mb + ' MB (curto para medir)'); Mbps = 0; MB = $mb; Seg = $seg } }

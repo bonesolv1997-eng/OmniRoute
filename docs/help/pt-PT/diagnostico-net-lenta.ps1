@@ -1,3 +1,4 @@
+# KIT-VERSION: 2026.09.16.5 (ASCII)
 <#
     diagnostico-net-lenta.ps1  -  "a minha net ficou ma" : uma passagem de diagnostico
     ----------------------------------------------------------------------------------
@@ -26,7 +27,6 @@
 
     NAO altera nada no sistema. So le e mede. Podes partilhar o .txt gerado.
 #>
-# KIT-VERSION: 2026.09.16.4 (ASCII)
 
 [CmdletBinding()]
 param(
