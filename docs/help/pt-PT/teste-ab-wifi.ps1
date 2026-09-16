@@ -63,48 +63,89 @@ function Mostrar-Interfaces {
     return $ifs[0]
 }
 
-# ── Medição ────────────────────────────────────────────────────────────────
-$curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
+# ── Motor de medição com VALIDAÇÃO ─────────────────────────────────────────
+#  Uma medição só conta se: HTTP 200 E pelo menos 20 MB transferidos.
+#  Ficheiros pequenos (o SteamSetup.exe tem ~2,3 MB) davam números falsos.
+$MIN_BYTES_VALIDO = 20MB
+$MAX_SEGUNDOS = 15
+$Fontes = @(
+    @{ Nome = 'Cloudflare'; Url = 'https://speed.cloudflare.com/__down?bytes=' + ($MB * 1000000) },
+    @{ Nome = 'OVH (Franca)'; Url = 'https://proof.ovh.net/files/100Mb.dat' },
+    @{ Nome = 'Tele2 (HTTP)'; Url = 'http://speedtest.tele2.net/100MB.zip' },
+    @{ Nome = 'Cachefly (HTTP)'; Url = 'http://cachefly.cachefly.net/100mb.test' },
+    @{ Nome = 'Leaseweb (NL)'; Url = 'https://mirror.leaseweb.com/speedtest/100mb.bin' }
+)
+
+function Invoke-FonteSpeed([string]$nome, [string]$url, [string]$curl, [int]$maxSeg = $MAX_SEGUNDOS) {
+    if (-not $curl) {
+        $bytes = 0; $seg = 0.0; $http = 0
+        try {
+            $req = [System.Net.HttpWebRequest]::Create($url); $req.Timeout = 15000; $req.ReadWriteTimeout = 15000
+            $resp = $req.GetResponse(); $http = [int]$resp.StatusCode
+            $stream = $resp.GetResponseStream()
+            $buf = New-Object byte[] 65536
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            while ($sw.Elapsed.TotalSeconds -lt 12) {
+                $n = $stream.Read($buf, 0, $buf.Length); if ($n -le 0) { break }; $bytes += $n
+            }
+            $sw.Stop(); $seg = $sw.Elapsed.TotalSeconds
+            $stream.Close(); $resp.Close()
+        } catch { $bytes = 0 }
+        if ($http -eq 200 -and $bytes -ge $MIN_BYTES_VALIDO) {
+            return [pscustomobject]@{ Nome = $nome; Valido = $true; Motivo = ''; Mbps = (($bytes * 8.0) / 1000000.0 / [math]::Max($seg, 0.001)); MB = [math]::Round($bytes / 1MB, 1); Seg = $seg }
+        }
+        $motivo = if ($http -ne 200) { "HTTP $http" } else { "so " + [math]::Round($bytes / 1MB, 1) + " MB" }
+        return [pscustomobject]@{ Nome = $nome; Valido = $false; Motivo = $motivo; Mbps = 0; MB = [math]::Round($bytes / 1MB, 1); Seg = $seg }
+    }
+
+    $raw = & $curl -s -L -o NUL --connect-timeout 8 --max-time $maxSeg -w '%{http_code}|%{size_download}|%{speed_download}|%{time_total}' $url 2>$null
+    $partes = (($raw | Out-String).Trim()) -split '\|'
+    if ($partes.Count -lt 4) {
+        return [pscustomobject]@{ Nome = $nome; Valido = $false; Motivo = 'sem resposta do curl'; Mbps = 0; MB = 0; Seg = 0 }
+    }
+    $http = 0; $bytes = 0L; $bps = 0.0; $seg = 0.0
+    [void][int]::TryParse($partes[0].Trim(), [ref]$http)
+    [void][int64]::TryParse($partes[1].Trim(), [ref]$bytes)
+    [void][double]::TryParse($partes[2].Trim(), [ref]$bps)
+    [void][double]::TryParse($partes[3].Trim(), [ref]$seg)
+    $mb = [math]::Round($bytes / 1MB, 1)
+    if ($http -ne 200) { return [pscustomobject]@{ Nome = $nome; Valido = $false; Motivo = ('HTTP ' + $http); Mbps = 0; MB = $mb; Seg = $seg } }
+    if ($bytes -lt $MIN_BYTES_VALIDO) { return [pscustomobject]@{ Nome = $nome; Valido = $false; Motivo = ('so ' + $mb + ' MB (curto para medir)'); Mbps = 0; MB = $mb; Seg = $seg } }
+    return [pscustomobject]@{ Nome = $nome; Valido = $true; Motivo = ''; Mbps = ($bps * 8.0 / 1000000.0); MB = $mb; Seg = $seg }
+}
+
+function Invoke-TodasAsFontes([string]$curl) {
+    $lista = @()
+    foreach ($f in $Fontes) { $lista += (Invoke-FonteSpeed $f.Nome $f.Url $curl) }
+    return $lista
+}
 
 function Medir-Velocidade($rotulo) {
-    $fontes = @(
-        @{ Nome = 'Cloudflare'; Url = 'https://speed.cloudflare.com/__down?bytes=' + ($MB * 1000000) },
-        @{ Nome = 'Steam CDN'; Url = 'https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe' },
-        @{ Nome = 'Hetzner DE'; Url = 'https://speed.hetzner.de/100MB.bin' }
-    )
-    $melhor = 0; $melhorNome = ""
     Write-Host ""
     Write-Host ("  " + $rotulo) -ForegroundColor White
-    foreach ($f in $fontes) {
-        $sw = [System.Diagnostics.Stopwatch]::StartNew()
-        $bytes = 0
-        if ($curl) {
-            $out = & $curl -s -L -o NUL --connect-timeout 8 --max-time 15 -w '%{size_download}' $f.Url 2>$null
-            [void][int64]::TryParse((($out | Out-String).Trim()), [ref]$bytes)
+    $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
+    $lista = Invoke-TodasAsFontes $curl
+    $melhor = Mostrar-Resultados $lista
+    if ($melhor) { return [pscustomobject]@{ Mbps = $melhor.Mbps; Nome = $melhor.Nome } }
+    return [pscustomobject]@{ Mbps = 0; Nome = 'inconclusivo' }
+}
+
+function Mostrar-Resultados($lista) {
+    foreach ($r in $lista) {
+        if ($r.Valido) {
+            $cor = 'Green'; if ($r.Mbps -lt 300) { $cor = 'Yellow' }; if ($r.Mbps -lt 100) { $cor = 'Red' }
+            Write-Host ("    · " + $r.Nome.PadRight(16) + " " + ([math]::Round($r.Mbps,1)).ToString().PadLeft(7) + " Mbps   (" + $r.MB + " MB em " + [math]::Round($r.Seg,1) + " s)") -ForegroundColor $cor
         } else {
-            try {
-                $req = [System.Net.HttpWebRequest]::Create($f.Url); $req.Timeout = 15000; $req.ReadWriteTimeout = 15000
-                $resp = $req.GetResponse(); $stream = $resp.GetResponseStream()
-                $buf = New-Object byte[] 65536
-                while ($sw.Elapsed.TotalSeconds -lt 12) {
-                    $n = $stream.Read($buf, 0, $buf.Length); if ($n -le 0) { break }; $bytes += $n
-                }
-                $stream.Close(); $resp.Close()
-            } catch { $bytes = 0 }
+            Write-Host ("    · " + $r.Nome.PadRight(16) + " INVALIDO: " + $r.Motivo) -ForegroundColor DarkYellow
         }
-        $sw.Stop()
-        $seg = [math]::Max($sw.Elapsed.TotalSeconds, 0.001)
-        if ($bytes -le 0) {
-            Write-Host ("    · " + $f.Nome.PadRight(14) + "  sem dados (bloqueado/offline)") -ForegroundColor DarkYellow
-            continue
-        }
-        $mbps = ($bytes * 8.0) / 1000000.0 / $seg
-        if ($mbps -gt $melhor) { $melhor = $mbps; $melhorNome = $f.Nome }
-        $cor = 'Green'; if ($mbps -lt 300) { $cor = 'Yellow' }; if ($mbps -lt 100) { $cor = 'Red' }
-        Write-Host ("    · " + $f.Nome.PadRight(14) + " " + ([math]::Round($mbps,1)).ToString().PadLeft(7) + " Mbps  (" + [math]::Round($bytes/1MB,1) + " MB em " + [math]::Round($seg,1) + " s)") -ForegroundColor $cor
     }
-    if ($melhor -le 0) { Warn "Nenhuma fonte respondeu — sem rede nesta interface?" }
-    return [pscustomobject]@{ Mbps = $melhor; Nome = $melhorNome }
+    $validos = @($lista | Where-Object { $_.Valido })
+    if ($validos.Count -eq 0) {
+        Warn "Nenhuma fonte deu medicao valida (>=20 MB). Isto NAO quer dizer 'linha lenta': os testes falharam."
+        Write-Host "        Confirma a mao e ve o erro: curl.exe -v -o NUL --max-time 15 `"https://speed.cloudflare.com/__down?bytes=20000000`"" -ForegroundColor Gray
+        return $null
+    }
+    return ($validos | Sort-Object Mbps -Descending | Select-Object -First 1)
 }
 
 # ── Que adaptadores temos? ─────────────────────────────────────────────────

@@ -538,81 +538,93 @@ if (-not $mtuOk) { Warn "Não passou nenhum payload, mesmo pequeno — a respost
 # ────────────────────────────────────────────────────────────────────────────
 # 6. Velocidade real de download
 # ────────────────────────────────────────────────────────────────────────────
-Titulo "6. Velocidade real de download (4 fontes independentes)"
-Info "O plano é 1000 Mbps / 100 Mbps de upload. O teto prático é ~90-95% disso com tudo limpo."
+Titulo "6. Velocidade real de download (só medições válidas)"
+Info "O plano é 1000 Mbps / 100 Mbps. O teto prático é ~90-95% disso com tudo limpo."
+Info "Uma medição só conta se transferir >=20 MB (ficheiros pequenos dão números falsos)."
 
+$curlSpeed = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
 $resultados = @()
-if ($curlExe) {
-    $testes = @(
-        @{ Nome = 'Cloudflare (100 MB)'; Url = 'https://speed.cloudflare.com/__down?bytes=100000000' },
-        @{ Nome = 'Hetzner Alemanha (100 MB)'; Url = 'https://speed.hetzner.de/100MB.bin' },
-        @{ Nome = 'Steam CDN (Akamai)'; Url = 'https://cdn.akamai.steamstatic.com/client/installer/SteamSetup.exe' },
-        @{ Nome = 'Steam CDN (Cloudflare)'; Url = 'https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe' }
-    )
-    foreach ($t in $testes) {
-        $segundos = 10
-        $sw = [System.Diagnostics.Stopwatch]::StartNew()
-        $out = & $curlExe -s -L -o NUL --connect-timeout 8 --max-time $segundos -w '%{size_download}' $t.Url 2>$null
-        $sw.Stop()
-        $bytes = 0
-        [void][int64]::TryParse((($out | Out-String).Trim()), [ref]$bytes)
-        $segs = $sw.Elapsed.TotalSeconds
-        if ($bytes -le 0) {
-            Erro ($t.Nome + ": não recebi dados (bloqueado, offline ou URL indisponível).")
-            continue
+$minBytes = 20MB
+$fontesVel = @(
+    @{ Nome = 'Cloudflare'; Url = 'https://speed.cloudflare.com/__down?bytes=100000000' },
+    @{ Nome = 'OVH (Franca)'; Url = 'https://proof.ovh.net/files/100Mb.dat' },
+    @{ Nome = 'Tele2 (HTTP)'; Url = 'http://speedtest.tele2.net/100MB.zip' },
+    @{ Nome = 'Cachefly (HTTP)'; Url = 'http://cachefly.cachefly.net/100mb.test' },
+    @{ Nome = 'Leaseweb (NL)'; Url = 'https://mirror.leaseweb.com/speedtest/100mb.bin' }
+)
+foreach ($f in $fontesVel) {
+    if ($curlSpeed) {
+        $raw = & $curlSpeed -s -L -o NUL --connect-timeout 8 --max-time 15 -w '%{http_code}|%{size_download}|%{speed_download}|%{time_total}' $f.Url 2>$null
+        $p = (($raw | Out-String).Trim()) -split '\|'
+        $http = 0; $bytes = 0L; $bps = 0.0; $seg = 0.0
+        if ($p.Count -ge 4) {
+            [void][int]::TryParse($p[0].Trim(), [ref]$http)
+            [void][int64]::TryParse($p[1].Trim(), [ref]$bytes)
+            [void][double]::TryParse($p[2].Trim(), [ref]$bps)
+            [void][double]::TryParse($p[3].Trim(), [ref]$seg)
         }
-        $mbps = if ($segs -gt 0) { ($bytes * 8.0) / 1000000.0 / $segs } else { 0 }
-        $resultados += [pscustomobject]@{ Nome = $t.Nome; Mbps = $mbps; MB = [math]::Round($bytes / 1MB, 1) }
-        $cor = 'Green'; if ($mbps -lt 100) { $cor = 'Yellow' }; if ($mbps -lt 25) { $cor = 'Red' }
-        Write-Host ("  · " + $t.Nome.PadRight(30) + " " + ([math]::Round($mbps,1)).ToString().PadLeft(7) + " Mbps  (" + [math]::Round($bytes/1MB,1) + " MB em " + [math]::Round($segs,1) + " s)") -ForegroundColor $cor
-    }
-} else {
-    # Fallback .NET (respeita o proxy do sistema, por isso também serve de deteção)
-    foreach ($u in @('https://speed.cloudflare.com/__down?bytes=100000000')) {
+        $mb = [math]::Round($bytes / 1MB, 1)
+        if ($http -eq 200 -and $bytes -ge $minBytes) {
+            $mbps = $bps * 8.0 / 1000000.0
+            $resultados += [pscustomobject]@{ Nome = $f.Nome; Valido = $true; Motivo = ''; Mbps = $mbps; MB = $mb; Seg = $seg }
+            $cor = 'Green'; if ($mbps -lt 300) { $cor = 'Yellow' }; if ($mbps -lt 100) { $cor = 'Red' }
+            Write-Host ("  · " + $f.Nome.PadRight(16) + " " + ([math]::Round($mbps,1)).ToString().PadLeft(7) + " Mbps   (" + $mb + " MB em " + [math]::Round($seg,1) + " s)") -ForegroundColor $cor
+        } else {
+            $motivo = if ($http -ne 200) { "HTTP $http" } elseif ($bytes -lt $minBytes) { "so $mb MB (curto para medir)" } else { 'sem resposta' }
+            $resultados += [pscustomobject]@{ Nome = $f.Nome; Valido = $false; Motivo = $motivo; Mbps = 0; MB = $mb; Seg = $seg }
+            Write-Host ("  · " + $f.Nome.PadRight(16) + " INVALIDO: " + $motivo) -ForegroundColor DarkYellow
+        }
+    } else {
         try {
-            $req = [System.Net.HttpWebRequest]::Create($u)
-            $req.Timeout = 15000; $req.ReadWriteTimeout = 15000
-            $resp = $req.GetResponse()
-            $stream = $resp.GetResponseStream()
-            $buf = New-Object byte[] 65536
-            $total = 0; $sw = [System.Diagnostics.Stopwatch]::StartNew()
-            while ($sw.Elapsed.TotalSeconds -lt 10) {
-                $n = $stream.Read($buf, 0, $buf.Length)
-                if ($n -le 0) { break }
-                $total += $n
-            }
+            $req = [System.Net.HttpWebRequest]::Create($f.Url); $req.Timeout = 15000
+            $resp = $req.GetResponse(); $stream = $resp.GetResponseStream()
+            $buf = New-Object byte[] 65536; $total = 0
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            while ($sw.Elapsed.TotalSeconds -lt 10) { $n = $stream.Read($buf, 0, $buf.Length); if ($n -le 0) { break }; $total += $n }
             $stream.Close(); $resp.Close(); $sw.Stop()
-            $mbps = ($total * 8.0) / 1000000.0 / $sw.Elapsed.TotalSeconds
-            $resultados += [pscustomobject]@{ Nome = 'Cloudflare (.NET)'; Mbps = $mbps; MB = [math]::Round($total/1MB,1) }
-            Sub ("Cloudflare (.NET): " + [math]::Round($mbps,1) + " Mbps")
-        } catch { Erro ("Teste .NET falhou: " + $_.Exception.Message) }
+            if ($total -ge $minBytes) {
+                $mbps = ($total * 8.0) / 1000000.0 / $sw.Elapsed.TotalSeconds
+                $resultados += [pscustomobject]@{ Nome = $f.Nome; Valido = $true; Motivo = ''; Mbps = $mbps; MB = [math]::Round($total/1MB,1); Seg = $sw.Elapsed.TotalSeconds }
+                Write-Host ("  · " + $f.Nome.PadRight(16) + " " + ([math]::Round($mbps,1)).ToString().PadLeft(7) + " Mbps") -ForegroundColor Green
+            }
+        } catch { }
     }
 }
 
-if ($resultados.Count -gt 0) {
-    $melhor = ($resultados | Sort-Object Mbps -Descending | Select-Object -First 1)
+# Steam: só confirma o ACESSO (o ficheiro do instalador tem ~2 MB — não mede velocidade)
+try {
+    if ($curlSpeed) {
+        $st = & $curlSpeed -s -o NUL -w '%{http_code}' --max-time 10 'https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe' 2>$null
+        if (($st | Out-String).Trim() -eq '200') { Ok "Steam CDN acessivel (HTTP 200) — nao usada para velocidade (ficheiro pequeno)." }
+        else { Warn ("Steam CDN devolveu HTTP " + ($st | Out-String).Trim() + " — pode estar bloqueada ou filtrada.") }
+    }
+} catch { }
+
+$validosVel = @($resultados | Where-Object { $_.Valido })
+if ($validosVel.Count -gt 0) {
+    $melhor = $validosVel | Sort-Object Mbps -Descending | Select-Object -First 1
     Sub ("Melhor resultado: " + $melhor.Nome + " = " + [math]::Round($melhor.Mbps,1) + " Mbps (" + [math]::Round($melhor.Mbps/8,1) + " MB/s)")
     [void]$script:Veredito.Add([pscustomobject]@{ Chave = 'download'; Valor = $melhor.Mbps })
     if ($melhor.Mbps -lt 50) {
         Erro "Nenhuma fonte passou dos 50 Mbps. A ligação real está longe do plano — o problema NÃO é do Steam."
     } elseif ($melhor.Mbps -lt 300) {
-        Warn ("Máximo de " + [math]::Round($melhor.Mbps,1) + " Mbps. Numa linha de 1 Gbps isto aponta para Wi-Fi, porta/cabo a 100M, ou router sobrecarregado.")
+        Warn ("Máximo de " + [math]::Round($melhor.Mbps,1) + " Mbps. Numa linha de 1 Gbps isto aponta para link a 100 Mbps (cabo/porta/NIC), QoS do router, ou Wi-Fi.")
     } else {
-        Ok ("Ligação a " + [math]::Round($melhor.Mbps,1) + " Mbps — linha saudável. Se o Steam continua lento, o gargalo é do lado do Steam ou do disco.")
+        Ok ("Ligação a " + [math]::Round($melhor.Mbps,1) + " Mbps — linha saudável. Se o Steam continua lento, o gargalo é do Steam ou do disco.")
     }
-    # Diferença entre CDNs diz muito: uma fonte má = peering; todas más = linha/PC.
-    if ($resultados.Count -ge 2) {
-        $pior = ($resultados | Sort-Object Mbps | Select-Object -First 1)
+    if ($validosVel.Count -ge 2) {
+        $pior = $validosVel | Sort-Object Mbps | Select-Object -First 1
         if ($melhor.Mbps -gt 200 -and $pior.Mbps -lt ($melhor.Mbps / 4)) {
-            Warn ("Diferença enorme entre CDNs (" + $pior.Nome + " a " + [math]::Round($pior.Mbps,1) + " Mbps vs " + $melhor.Nome + " a " + [math]::Round($melhor.Mbps,1) + " Mbps). Isto é típico de peering/rota do ISP para essa rede. Testa mudar o DNS para 1.1.1.1 e volta a medir.")
+            Warn ("Diferença enorme entre CDNs (" + $pior.Nome + ": " + [math]::Round($pior.Mbps,1) + " Mbps vs " + $melhor.Nome + ": " + [math]::Round($melhor.Mbps,1) + " Mbps). Típico de peering/rota do ISP para essa rede — testar DNS 1.1.1.1 e outra hora do dia.")
         }
     }
+} else {
+    Warn "INCONCLUSIVO: nenhuma fonte deu uma medição válida (>=20 MB). Isto NÃO significa 'linha lenta'."
+    Info "Confirma à mão e vê o erro: curl.exe -v -o NUL --max-time 15 `"https://speed.cloudflare.com/__down?bytes=20000000`""
+    Info "Se aparecer 'SSL certificate problem' / 'schannel', há inspeção HTTPS ativa (antivírus ou Traffic Inspector do OmniRoute — secção 8)."
 }
 Info "Nota: o Steam instala com centenas de ficheiros pequenos — a velocidade 'útil' é sempre bem menor que o teste de 100 MB, e o disco/CPU contam."
 
-# ────────────────────────────────────────────────────────────────────────────
-# 7. Interceção TLS: ficheiros hosts e certificados
-# ────────────────────────────────────────────────────────────────────────────
 # ────────────────────────────────────────────────────────────────────────────
 # 6b. Opções TCP globais do Windows (autotuning do receive window)
 #     Quando isto está desligado, muitos adaptadores (sobretudo Intel AX200)

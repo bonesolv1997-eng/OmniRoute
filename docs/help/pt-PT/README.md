@@ -195,8 +195,43 @@ exatamente o primeiro dado do diagnóstico. Copia-me o texto vermelho que aparec
 | MTU < 1500 | PPPoE/VPN/túnel mal configurado | Ajustar MTU no router/PC para 1492 |
 | Proxy a apontar para `127.0.0.1` | **Software de captura de tráfego** (ex.: OmniRoute) | Secção 8 |
 | Preço/velocidade estranhos, chip Intel I225/I226 | Driver antigo + EEE ligado | Secção 4b |
+| **Uma fonte de teste falha ou "descarrega 2 MB em 0,2 s"** | **Medição inválida** — ficheiro pequeno ou ligação falhada. Não é velocidade | Ver "Medições válidas" abaixo |
+| **Ethernet "Realtek PCIe GbE"** | RTL8168/8111: `Green Ethernet`, `Gigabit Lite`, EEE e driver antigo — cola o link perto dos ~90 Mbps | Secção 4b (Realtek) |
 | Placa "Killer" com perfil de prioridade configurado | Killer Control Center a limitar por app | Secção 4b |
 | Disco < 60 MB/s | HDD, disco cheio, ou porta SATA antiga | Instalar o jogo em NVMe |
+
+---
+
+### Medições válidas (e o erro de medir com ficheiros pequenos)
+
+Um teste de velocidade **só é válido se** transferir um ficheiro grande (≥ 20 MB) com **HTTP
+200**. Caso contrário, o número é lixo. Exemplo real deste caso: o `SteamSetup.exe` que estava
+a ser usado como fonte tem apenas **2,3 MB** — "82,8 Mbps (2,3 MB em 0,2 s)" não mede velocidade
+nenhuma, é um pico de 0,2 segundos. E "Cloudflare: 0 MB em 0,1 s" é uma **ligação falhada**,
+não "0 Mbps".
+
+Os scripts deste kit (v2) validam isto e escrevem **INVALIDO**/**INCONCLUSIVO** em vez de
+inventarem um veredito. Fontes usadas (todas de ~100 MB, HTTPS e HTTP misturados):
+
+| Fonte | URL | Nota |
+|---|---|---|
+| Cloudflare | `https://speed.cloudflare.com/__down?bytes=100000000` | HTTPS |
+| OVH (França) | `https://proof.ovh.net/files/100Mb.dat` | bom peering para PT |
+| Tele2 | `http://speedtest.tele2.net/100MB.zip` | HTTP (apanha filtros que só afetam HTTP) |
+| Cachefly | `http://cachefly.cachefly.net/100mb.test` | HTTP, CDN global |
+| Leaseweb (NL) | `https://mirror.leaseweb.com/speedtest/100mb.bin` | HTTPS |
+| Steam CDN | `SteamSetup.exe` | **só verifica acesso** — ficheiro pequeno |
+| ~~Hetzner~~ | — | removida: falha em muitas redes (3× neste caso) |
+
+Se **todas** falharem, é isso mesmo que interessa saber: confirma à mão e lê o erro —
+
+```powershell
+curl.exe -v -o NUL --max-time 15 "https://speed.cloudflare.com/__down?bytes=20000000"
+```
+
+`SSL certificate problem` / `schannel` nessa saída = **inspeção HTTPS ativa** (antivírus com
+inspeção TLS ou Traffic Inspector do OmniRoute — secção 8). É uma das poucas coisas que
+bloqueia downloads grandes sem tocar na latência.
 
 ---
 
@@ -290,6 +325,32 @@ perfis com limite de download — o script lista os que encontrar instalados e a
 > placa Intel, não é só "mais uma porta": confirma qual delas está a ser usada
 > (`Get-NetRoute -DestinationPrefix 0.0.0.0/0` → `InterfaceAlias`) — é comum a rota continuar
 > a passar pela Wi-Fi ou pela porta de 1G.
+
+## 4b-bis. Ethernet Realtek (RTL8168/8111 — "Realtek PCIe GbE Family Controller")
+
+Se o Windows mostrar **"Realtek PCIe GbE Family Controller"** (é o caso aqui), aplica-se tudo o
+que está dito para a Intel — as **mesmas** propriedades existem no driver Realtek, com nomes
+parecidos, e são a causa clássica do sintoma "1 Gbps negociado mas ~90 Mbps de débito":
+
+| Propriedade (driver Realtek) | Valor | Porquê |
+|---|---|---|
+| **Green Ethernet** | **Disabled** | Poupança de energia que, em muitos routers/portas, degrada o link |
+| **Gigabit Lite** | **Disabled** | Reduz o consumo à custa de estabilidade — o suspeito nº 1 nos ~90 Mbps |
+| **Energy-Efficient Ethernet / EEE** | **Disabled** | Causa quedas para 100 Mbps em negociação com algumas portas |
+| **Power Saving Mode / Ultra Low Power Mode** | **Disabled** | Idem |
+| **Speed & Duplex** | **Auto Negotiation** | Forçar é fonte de instabilidade |
+| **Jumbo Packet** | Disabled | Só ajuda em links 10G diretos |
+| **Flow Control** | Deixa em Auto (testa Disabled se houver perda) | |
+| Gestão de energia ("permitir desligar") | **Desligado** | Evita dormência do adaptador |
+
+Driver: vem do **fabricante da placa-mãe** (modelo exato) ou do site da Realtek — o driver do
+Windows Update costuma ser antigo. Um Realtek com driver antigo + `Gigabit Lite` ligado é o
+padrão clássico de "cabo Gigabit, velocidade de 100 Mbps".
+
+Também é este o adaptador onde o relatório registou **3703 pacotes descartados**: troca o cabo
+e a porta do router, e repete (`Get-NetAdapterStatistics`).
+
+---
 
 ## 4c. macOS / Apple Silicon (se for o teu caso)
 
@@ -693,7 +754,7 @@ Depois:
 |---|---|
 | `resmon` (Monitor de Recursos) | Ver rede vs disco vs CPU em tempo real |
 | Speedtest CLI (`speedtest -s <id do servidor>`) | Comparar com o servidor do operador |
-| `curl -o NUL https://speed.hetzner.de/100MB.bin` | Teste de 100 MB sem interface web |
+| `curl -o NUL https://proof.ovh.net/files/100Mb.dat` | Teste de 100 MB sem interface web (Hetzner falha em muitas redes) |
 | Cloudflare Speed Test / Waveform Bufferbloat | Latência sob carga (bufferbloat) |
 | `medir-velocidade.ps1` (deste kit) | A/B rápido: interface + latência + velocidade em 30 s |
 | CrystalDiskInfo / `smartctl` | Saúde e velocidade do disco |
@@ -717,6 +778,16 @@ Placa-mãe AMD, NIC Intel (Ethernet) + Wi-Fi, linha 1000/100 Mbps, BF6 na Steam 
 | `Green Ethernet` + `Gigabit Lite` **ligados** na Intel | Causa clássica de link errático/velocidade baixa em I219/I225/I226 | Desligar nas Propriedades Avançadas |
 | `Speed & Duplex` forçado a `1.0 Gbps Full Duplex` | Não limita (a placa é 1G), mas Auto é mais seguro | Pôr em Auto Negotiation |
 | 3703 pacotes descartados | Cabo/porta ou link saturado | Trocar cabo e porta do router, repetir |
+
+Segundo relatório (teste A/B Wi-Fi vs cabo e ajustes de energia):
+
+| Observação | Leitura | Ação |
+|---|---|---|
+| `U-APSD`, `MIMO Power Save`, `Sleep on WoWLAN`, `Packet Coalescing` já nos valores bons; plano já em `0x00000000` | **Poupança de energia não era a causa** (hipótese eliminada) | — |
+| Gestão de energia do adaptador desligada e Wi-Fi reiniciada com sucesso | Feito | — |
+| Teste A/B: **Wi-Fi = 93 % do cabo** (82,8 vs 89 Mbps) | A Wi-Fi (AX200) **não** está a limitar | Seguir para o cabo/Steam |
+| Ethernet é **"Realtek PCIe GbE Family Controller"** (não Intel) | O alvo no cabo é o driver/propriedades **Realtek** | Secção 4b-bis |
+| Cloudflare "0 Mbps (0 MB em 0,1 s)" e Steam CDN "2,3 MB em 0,2 s" | **Medições inválidas**: ligação falhada + ficheiro de 2,3 MB | Corrigido no kit v2 (`medir-velocidade.ps1` valida ≥20 MB); repetir |
 
 Sequência de resolução (o que fazer por esta ordem): **limite do Steam → desligar a Wi-Fi e
 medir por cabo → Green Ethernet/Gigabit Lite off + driver Wi-Fi atualizado → trocar cabo/porta

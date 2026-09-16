@@ -298,32 +298,47 @@ if tem ping; then
 fi
 
 # ───────────────────────────────────────────────────────────────────────────
-titulo "6. Velocidade real de download"
+titulo "6. Velocidade real de download (só medições válidas)"
 info "Plano declarado: 1000 Mbps de download / 100 Mbps de upload."
+info "Uma medição só conta se transferir >=20 MB (ficheiros pequenos dão números falsos)."
 if ! tem curl; then
-  warn "curl não instalado — não consigo medir velocidade real."
+  warn "curl não instalado — não consigo medir velocidade real (apt install curl / brew install curl)."
 else
   MELHOR=0; MELHOR_NOME=""
-  medir() { # $1=nome $2=url
-    local nome="$1" url="$2" t b mbps
-    # uma única transferência: bytes e tempo vêm da mesma medição
-    local raw
-    raw=$(curl -s -L -o /dev/null --connect-timeout 8 --max-time 10 -w '%{size_download} %{time_total}' "$url" 2>/dev/null)
-    b=${raw%% *}
-    t=${raw##* }
-    [ -n "$b" ] || b=0
-    [ -n "$t" ] || t=0
-    if [ "${b%.*}" -le 0 ] 2>/dev/null; then
-      erro "$nome: não recebi dados (bloqueado, offline ou URL indisponível)."
+  MIN_BYTES=20000000
+  medir() { # $1=nome, $2=url — só aceita HTTP 200 com >=20 MB
+    local nome="$1" url="$2" raw http bytes bps seg mbps mb
+    raw=$(curl -s -L -o /dev/null --connect-timeout 8 --max-time 15 -w '%{http_code} %{size_download} %{speed_download} %{time_total}' "$url" 2>/dev/null)
+    http=$(printf '%s' "$raw" | awk '{print $1}')
+    bytes=$(printf '%s' "$raw" | awk '{print $2}')
+    bps=$(printf '%s' "$raw" | awk '{print $3}')
+    seg=$(printf '%s' "$raw" | awk '{print $4}')
+    mb=$(awk -v b="${bytes:-0}" 'BEGIN{printf "%.1f", b/1048576}')
+    if [ "${http:-0}" != "200" ]; then
+      erro "$nome: HTTP ${http:-sem resposta} (indisponível ou bloqueado)"
       return
     fi
-    mbps=$(awk -v b="$b" -v t="$t" 'BEGIN{ if(t<=0) t=0.001; printf "%.1f", b*8/1000000/t }')
-    printf '  · %-32s %8s Mbps  (%s MB em %s s)\n' "$nome" "$mbps" "$(awk -v b="$b" 'BEGIN{printf "%.1f", b/1048576}')" "$t"
+    if awk -v b="${bytes:-0}" -v m="$MIN_BYTES" 'BEGIN{exit !(b<m)}'; then
+      warn "$nome: transferiu apenas $mb MB — curto demais para medir velocidade"
+      return
+    fi
+    mbps=$(awk -v b="${bps:-0}" 'BEGIN{printf "%.1f", b*8/1000000}')
+    printf '  · %-18s %8s Mbps   (%s MB em %s s)\n' "$nome" "$mbps" "$mb" "${seg:-?}"
     if awk -v m="$mbps" -v best="$MELHOR" 'BEGIN{exit !(m>best)}'; then MELHOR="$mbps"; MELHOR_NOME="$nome"; fi
   }
-  medir "Cloudflare (100 MB)"        'https://speed.cloudflare.com/__down?bytes=100000000'
-  medir "Hetzner Alemanha (100 MB)"  'https://speed.hetzner.de/100MB.bin'
-  medir "Steam CDN (Cloudflare)"     'https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe'
+  medir "Cloudflare"      'https://speed.cloudflare.com/__down?bytes=100000000'
+  medir "OVH (Franca)"    'https://proof.ovh.net/files/100Mb.dat'
+  medir "Tele2 (HTTP)"    'http://speedtest.tele2.net/100MB.zip'
+  medir "Cachefly (HTTP)" 'http://cachefly.cachefly.net/100mb.test'
+  medir "Leaseweb (NL)"   'https://mirror.leaseweb.com/speedtest/100mb.bin'
+
+  # Steam: só confirma o acesso — o instalador tem ~2 MB e não serve para medir velocidade
+  st=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 'https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe' 2>/dev/null)
+  if [ "$st" = "200" ]; then
+    ok "Steam CDN acessível (HTTP 200) — não usada para velocidade (ficheiro pequeno)."
+  else
+    warn "Steam CDN devolveu HTTP ${st:-sem resposta} — pode estar bloqueada/filtrada."
+  fi
 
   if [ -n "$MELHOR_NOME" ]; then
     DL_MBPS="$MELHOR"
@@ -331,10 +346,16 @@ else
     if awk -v m="$MELHOR" 'BEGIN{exit !(m<50)}'; then
       erro "Nenhuma fonte passou dos 50 Mbps. A ligação real está longe do plano — o problema NÃO é do Steam."
     elif awk -v m="$MELHOR" 'BEGIN{exit !(m<300)}'; then
-      warn "Máximo de $MELHOR Mbps numa linha de 1 Gbps. Aponta para Wi-Fi, porta/cabo a 100M, ou router sobrecarregado."
+      warn "Máximo de $MELHOR Mbps numa linha de 1 Gbps. Aponta para link a 100 Mbps (cabo/porta/NIC), QoS do router, ou Wi-Fi."
+    elif awk -v m="$MELHOR" 'BEGIN{exit !(m<700)}'; then
+      info "Entre 300 e 700 Mbps ($MELHOR Mbps): bom, mas há margem numa linha de 1 Gbps."
     else
-      ok "Ligação a $MELHOR Mbps — linha saudável. Se o Steam continua lento, o gargalo é do Steam ou do disco."
+      ok "Linha saudável: $MELHOR Mbps — o gargalo do Steam não está na rede."
     fi
+  else
+    warn "INCONCLUSIVO: nenhuma fonte deu medição válida (>=20 MB). Isto NÃO significa 'linha lenta'."
+    info "Confirma à mão e vê o erro: curl -v -o /dev/null --max-time 15 'https://speed.cloudflare.com/__down?bytes=20000000'"
+    info "Se aparecer 'SSL certificate problem', há inspeção HTTPS ativa (antivírus ou Traffic Inspector do OmniRoute — secção 8)."
   fi
   info "O Steam instala centenas de ficheiros pequenos: a velocidade útil é sempre menor que este teste."
 fi
