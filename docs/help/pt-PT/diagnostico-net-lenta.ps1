@@ -175,6 +175,120 @@ try {
 } catch { }
 
 # ────────────────────────────────────────────────────────────────────────────
+# 1b. Chip de rede, driver e propriedades que estrangulam
+#     (Intel I219 = 1 Gbps; I225/I226 = 2,5 Gbps com defeitos conhecidos de
+#      negociação; "Killer" = marca Intel com limite de banda por aplicação)
+# ────────────────────────────────────────────────────────────────────────────
+Titulo "1b. Chip de rede, driver e propriedades que estrangulam"
+try {
+    $nics = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' }
+    foreach ($n in $nics) {
+        Sub ($n.Name + "  [" + $n.InterfaceDescription + "]   estado=" + $n.Status)
+        $dd = ""
+        try { if ($n.DriverDate) { $dd = ([datetime]$n.DriverDate).ToString('yyyy-MM-dd') } } catch { }
+        Sub ("    Driver: " + $n.DriverProvider + " " + $n.DriverVersion + "  (" + $dd + ")")
+        try {
+            if ($n.DriverDate -and ([datetime]$n.DriverDate) -lt (Get-Date).AddYears(-3)) {
+                Warn ("O driver de " + $n.Name + " e de " + $dd + " (mais de 3 anos). Nas NICs Intel isto explica quedas de link e velocidade erratica — atualiza com o Intel Driver & Support Assistant (DSA).")
+            }
+        } catch { }
+
+        # Notas por modelo (Intel e "Killer", que hoje e Intel)
+        if ($n.InterfaceDescription -match 'Intel|Killer') {
+            if ($n.InterfaceDescription -match 'I225|I226') {
+                Warn ("Intel I225/I226 (2,5 Gbps) detetada. Casos conhecidos: o link cai para 100 Mbps ou 1 Gbps com 'Energy Efficient Ethernet' ligado, driver antigo, ou certos routers/switches. Atualiza o driver e desliga EEE/Green Ethernet.")
+            } elseif ($n.InterfaceDescription -match 'I219|I218|I217') {
+                Sub "    Nota: I219/I218 e uma NIC de 1 Gbps — o teto pratico e ~940 Mbps."
+            } elseif ($n.InterfaceDescription -match 'I210|I211|I350') {
+                Sub "    Nota: I210/I211/I350 e uma NIC de 1 Gbps (server-grade)."
+            } elseif ($n.InterfaceDescription -match 'X520|X540|X550|X710') {
+                Sub "    Nota: serie X5xx/X7xx = 10 Gbps — confirma que o router/switch tambem e 10G ou 2,5G."
+            }
+            if ($n.InterfaceDescription -match 'Killer|Connectivity Performance') {
+                Warn "Esta placa e 'Killer' (marca Intel). O Killer Control Center / Intel Connectivity Performance Suite tem controlo de largura de banda POR APLICACAO — abre-o e confirma que nao ha um limite de download (o classico e 10 Mbps)."
+            }
+        }
+
+        # Propriedades avancadas: Speed & Duplex e poupancas de energia
+        $adv = @()
+        try { $adv = @(Get-NetAdapterAdvancedProperty -Name $n.Name -ErrorAction Stop) } catch { }
+        if ($adv.Count -gt 0) {
+            $sd = $adv | Where-Object { $_.DisplayName -match 'Speed|Duplex|Velocidade' } | Select-Object -First 1
+            if ($sd) {
+                Sub ("    " + $sd.DisplayName + " = " + $sd.DisplayValue)
+                $maxMbps = 0
+                foreach ($v in ($sd.ValidDisplayValues | Select-Object -Unique)) {
+                    $m = 0
+                    if ($v -match '([\d\.,]+)\s*Gbps') { $m = [double]($matches[1] -replace ',', '.') * 1000 }
+                    elseif ($v -match '(\d+)\s*Mbps') { $m = [double]$matches[1] }
+                    else { continue }
+                    if ($m -gt $maxMbps) { $maxMbps = $m }
+                }
+                if ($maxMbps -gt 0) { Sub ("    Velocidade maxima suportada pela placa: " + $maxMbps + " Mbps") }
+                if ($sd.DisplayValue -notmatch 'Auto|Autom') {
+                    Warn ("'" + $sd.DisplayName + "' esta FORCADO a '" + $sd.DisplayValue + "' em vez de Auto Negotiation (em " + $n.Name + "). Se for 100 Mbps, o teto da linha inteira passa a ~94 Mbps.")
+                }
+                if ($maxMbps -gt 0 -and $maxMbps -le 100) {
+                    Warn ("A placa " + $n.Name + " so suporta 100 Mbps (Fast Ethernet) — seria o teto absoluto, independentemente do plano.")
+                }
+            }
+            $eco = $adv | Where-Object { $_.DisplayName -match 'Energy Efficient|Green Ethernet|Eco|Gigabit Lite|Reduce Speed|Reduce Link|Power Saving|Ultra Low Power|Low Power|Power Management' }
+            foreach ($e in $eco) {
+                Sub ("    " + $e.DisplayName + " = " + $e.DisplayValue)
+                if ($e.DisplayValue.Trim() -match '^(Enabled|On|Ativado|Habilitado|Yes|Ligado|Sim)$') {
+                    Warn ("'" + $e.DisplayName + "' esta LIGADO em " + $n.Name + ". Em NICs Intel (sobretudo I225/I226 e I219) isto provoca quedas de link e velocidade baixa/erratica. Desliga-o: Gestor de Dispositivos > adaptador > Propriedades > Avancadas.")
+                }
+            }
+        }
+
+        # Gestao de energia do adaptador
+        try {
+            $pm = Get-NetAdapterPowerManagement -Name $n.Name -ErrorAction Stop
+            if ($pm.AllowComputerToTurnOffDevice -and $pm.AllowComputerToTurnOffDevice -ne 'Unsupported') {
+                if ($pm.AllowComputerToTurnOffDevice -match 'Enabled') {
+                    Warn ("Gestao de energia de " + $n.Name + ": 'Permitir que o computador desligue este dispositivo para poupar energia' esta ligado. Desliga em Gestor de Dispositivos > adaptador > Propriedades > Gestao de energia.")
+                }
+            }
+        } catch { }
+    }
+} catch { Warn ("Analise das placas de rede falhou: " + $_.Exception.Message) }
+
+# Software de fabricante / terceiros que pode limitar largura de banda
+try {
+    $chaves = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+    $padrao = 'Killer|GameFirst|Turbo ?LAN|LAN ?Manager|NetLimiter|cFosSpeed|GlassWire|Traffic ?Shaper|Bandwidth ?(Manager|Control)|Connectivity Performance|Intel.{0,3}(PROSet|Connectivity|Driver)|Dragon|Speedify|WTFast|ExitLag|NetBalancer|SoftPerfect|Optimizer|Optimizador|Booster|TCP.?Optimi'
+    $progs = Get-ItemProperty -Path $chaves -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -and $_.DisplayName -match $padrao } |
+        Select-Object DisplayName, DisplayVersion -Unique
+    if ($progs) {
+        Sub "Software de gestao/aceleracao de rede instalado (candidato a limite de banda):"
+        foreach ($pr in $progs) { Sub ("    " + $pr.DisplayName + "  " + $pr.DisplayVersion) }
+        Warn "Existe software de gestao de rede instalado. Abre-o e confirma que nao ha um PERFIL com limite de download (o valor tipico de bloqueio e 10 Mbps). Se nao usas, desinstala — varios destes instalam filtros de rede proprios."
+    } else {
+        Ok "Sem software de gestao/limitacao de banda instalado (Killer/GameFirst/Turbo LAN/LAN Manager/NetLimiter/cFosSpeed/...)."
+    }
+    $svcs = Get-Service -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match 'Killer|GameFirst|TurboLAN|NetLimiter|cFos|Speedify|WTFast|ExitLag|icps|IntelConnectivity|Dragon|NetBalanc' }
+    foreach ($sv in $svcs) { Sub ("Servico relacionado: " + $sv.Name + " (" + $sv.Status + ")") }
+} catch { }
+
+# Estado do link: o que estao a negociar agora
+try {
+    foreach ($n in (Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' })) {
+        Sub ($n.Name + ": negociado " + $n.LinkSpeed + " | full duplex=" + $n.FullDuplex + " | MTU=" + $n.MtuSize + " | MAC=" + $n.MacAddress)
+        $st = Get-NetAdapterStatistics -Name $n.Name -ErrorAction SilentlyContinue
+        if ($st) {
+            $erros = [int64]$st.ReceivedDiscardedPackets + [int64]$st.OutboundDiscardedPackets
+            if ($erros -gt 0) { Warn ("Contadores de descarte em " + $n.Name + ": " + $erros + " pacotes descartados. Cabo/porta com problemas, ou link saturado.") }
+        }
+    }
+} catch { }
+
+# ────────────────────────────────────────────────────────────────────────────
 # 2. PROXIES PRESOS  — suspeito nº1 quando "a net ficou má de repente"
 # ────────────────────────────────────────────────────────────────────────────
 Titulo "2. Proxies e interceção ativa (suspeito nº 1)"

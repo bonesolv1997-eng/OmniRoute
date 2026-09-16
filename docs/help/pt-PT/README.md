@@ -38,6 +38,9 @@ powershell -ExecutionPolicy Bypass -File .\diagnostico-net-lenta.ps1
 ```bash
 # macOS / Linux
 bash diagnostico-net-lenta.sh
+
+# macOS / Linux — só a parte da placa de rede (driver, EEE, limites de software)
+bash checar-nic-macos-linux.sh
 ```
 
 No fim ficas com um `diagnostico-rede-<data>.txt` com tudo o que foi medido — podes lê-lo
@@ -65,6 +68,8 @@ Este passo de 30 segundos identifica a maioria dos casos sozinho.
 | Latência até ao **router** > 5 ms | Wi-Fi fraco ou router sobrecarregado | Canal 5 GHz, menos dispositivos, reiniciar |
 | MTU < 1500 | PPPoE/VPN/túnel mal configurado | Ajustar MTU no router/PC para 1492 |
 | Proxy a apontar para `127.0.0.1` | **Software de captura de tráfego** (ex.: OmniRoute) | Secção 8 |
+| Preço/velocidade estranhos, chip Intel I225/I226 | Driver antigo + EEE ligado | Secção 4b |
+| Placa "Killer" com perfil de prioridade configurado | Killer Control Center a limitar por app | Secção 4b |
 | Disco < 60 MB/s | HDD, disco cheio, ou porta SATA antiga | Instalar o jogo em NVMe |
 
 ---
@@ -107,6 +112,66 @@ O script deste kit lê o `config.vdf` e mostra-te **exatamente** os limites conf
   = 30–60 Mbps reais). Prefere cabo direto ou Mesh com backhaul dedicado.
 - **Porta de 2,5 GbE**: se tens router 2,5G ou 10G, confirma que o PC não está ligado a uma
   porta 1G com cabo mau.
+
+---
+
+## 4b. Placa de rede Intel (I219 / I225 / I226 / Killer / X5xx)
+
+Motherboard AMD + NIC Intel é uma combinação perfeitamente normal — **o chipset AMD não
+limita largura de banda** (o "AMD Chipset Software" não tem traffic shaping). O que existe,
+e é específico do teu caso, é o ecossistema Intel à volta da placa de rede. Diagnóstico em
+30 segundos no PowerShell:
+
+```powershell
+Get-NetAdapter | Format-Table Name, InterfaceDescription, LinkSpeed, DriverVersion, DriverDate, MacAddress
+```
+
+Interpreta assim:
+
+| Chip (aparece em `InterfaceDescription`) | Máx. teórico | O que costuma correr mal |
+|---|---|---|
+| Intel **I217/I218/I219** (LM/V) | 1 Gbps | Teto real ~940 Mbps. "Gigabit Lite" e EEE ligados podem fazer o link cair ou ficar errático. |
+| Intel **I210/I211/I350** | 1 Gbps | Server-grade, praticamente sem surpresas. |
+| Intel **I225-V / I226-V** | 2,5 Gbps | **Defeito conhecido**: o link cai para 100 Mbps ou 1 Gbps, ou perde-se, com *Energy Efficient Ethernet* ligado, driver antigo (2020-2021) ou certos routers/switches. Driver/firmware recentes corrigem — é o caso mais comum de "a net piorou sem razão". |
+| Intel **X520/X540/X550/X710** | 10 Gbps | Se o router é 1G, o link negocia 1G. Cabo CAT6/CAT6a obrigatório. |
+| **Killer** E2x00/E3x00 e "Killer Wi-Fi 6/6E/7" | 1/2,5 Gbps | Hoje é marca Intel. O **Killer Control Center / Intel Connectivity Performance Suite limita largura de banda POR APLICAÇÃO** — é um dos poucos sítios onde 10 Mbit/s aparece escrito a todas as letras. |
+
+**Propriedades avançadas a rever** (Gestor de Dispositivos → adaptador de rede → Propriedades
+→ Avançadas). O script do kit lê-as todas e avisa; a lista do que importa:
+
+| Propriedade | Valor correto | Porquê |
+|---|---|---|
+| Speed & Duplex | **Auto Negotiation** | Se estiver forçado a 100 Mbps, esse passa a ser o teto de toda a linha. |
+| Energy Efficient Ethernet / Green Ethernet / Gigabit Lite | **Disabled** | Fonte clássica de quedas de link e velocidade baixa nos I219/I225/I226. |
+| Reduce Speed On Power Down / Ultra Low Power Mode | **Disabled** | Poupança de energia que estrangula o link. |
+| Gestão de energia → "permitir desligar o dispositivo" | **Desligado** | Evita o adaptador adormecer/cair. |
+| Jumbo Packet | Disabled (1500) | Jumbo só ajuda em link direto 10G; fora disso causa problemas. |
+| RSS / Interrupt Moderation | Enabled | Manter por omissão (mexer só se souberes o que fazes). |
+
+**Driver**: usa o **Intel Driver & Support Assistant (DSA)** ou a página de downloads da
+Intel pelo **modelo exato** (I225-V ≠ I226-V em algumas versões). O driver que vem pelo
+Windows Update costuma ter 3-5 anos e é a causa nº 1 destes sintomas em placas Intel.
+
+**Software de fabricante** — aqui o que interessa não é AMD vs Intel, é a **marca da
+motherboard**, que é quem empacota o utilitário de rede: **MSI LAN Manager** (limite de
+largura de banda por aplicação, típico em placas MSI com NIC **Intel** — dos suspeitos nº 1
+para "exatamente 10 Mbps"), **ASUS GameFirst / Armoury Crate**, **Gigabyte Dragon**,
+**Killer Control Center** e **Intel Connectivity Performance Suite**, **cFosSpeed**,
+**NetLimiter**, **GlassWire**, "Turbo LAN", "Network Accelerator". Todos têm (ou já tiveram)
+perfis com limite de download — o script lista os que encontrar instalados e avisa.
+
+> Se adicionaste recentemente um **adaptador USB de 2,5G** (Realtek RTL8156, Aquantia) à
+> placa Intel, não é só "mais uma porta": confirma qual delas está a ser usada
+> (`Get-NetRoute -DestinationPrefix 0.0.0.0/0` → `InterfaceAlias`) — é comum a rota continuar
+> a passar pela Wi-Fi ou pela porta de 1G.
+
+### 4c. macOS / Apple Silicon (se for o teu caso)
+
+Em Apple Silicon, ligar um adaptador USB/Thunderbolt de 2,5G cria por vezes um **bridge com o
+Wi-Fi** e o tráfego TCP passa a "andar por cima" da interface sem fios — a velocidade do cabo
+fica então limitada pelo Wi-Fi. Verifica com `ifconfig bridge0` / Preferências → Rede, e testa
+com o Wi-Fi desligado. O ficheiro `checar-nic-macos-linux.sh` deste kit faz esta verificação
+(3b) e o equivalente Linux de driver/EEE/erros de descarte (5b).
 
 ---
 
@@ -246,7 +311,9 @@ Depois:
 4. [ ] **Proxies** (WinHTTP / WinINET / gsettings) e **certificados de interceção** limpos.
 5. [ ] Reiniciar o router (tomada 30 s) e medir outra vez.
 6. [ ] Medir no telemóvel por Wi-Fi 5 GHz e por 5G — isola PC vs linha.
-7. [ ] Verificar **QoS/GameFirst/Turbo LAN/Killer/NetLimiter** com limites de 10 Mbps por app.
+7. [ ] **Chip de rede (Intel?)**: driver atualizado, `Speed & Duplex = Auto`, EEE desligado,
+   e sem **Killer Control Center / GameFirst / Intel Connectivity Performance Suite** com
+   perfil de limite de banda (secção 4b).
 8. [ ] Testar o mesmo ficheiro em hora de ponta e fora dela (peering/CDN).
 9. [ ] Se tudo isto falhar: testar diretamente ligado ao ONT/modem do ISP, e só depois
    abrir ticket no ISP com os números do relatório (velocidade, perda, jitter, MTU, horário).
@@ -262,6 +329,8 @@ Depois:
 | `curl -o NUL https://speed.hetzner.de/100MB.bin` | Teste de 100 MB sem interface web |
 | Cloudflare Speed Test / Waveform Bufferbloat | Latência sob carga (bufferbloat) |
 | CrystalDiskInfo / `smartctl` | Saúde e velocidade do disco |
+| Intel Driver & Support Assistant (DSA) | Deteta e atualiza driver da NIC Intel |
+| `ethtool -S eth0` / `ethtool --show-eee eth0` | Erros de descarte e estado do EEE (Linux) |
 | WiFi Analyzer / `netsh wlan show interfaces` | Canal, banda e sinal Wi-Fi |
 
 ---
