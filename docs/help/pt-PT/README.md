@@ -234,7 +234,8 @@ Get-NetAdapter | Where-Object { $_.PhysicalMediaType -match '802.11' } |
 
 | Se a `InterfaceDescription` disser... | Onde se atualiza |
 |---|---|
-| **Intel Wi-Fi 6/6E/7** (AX200, AX201, AX210, AX211, BE200...), **9000** (9560, 9260) | **Intel DSA** (deteta sozinho) ou pacote oficial **24.70.0** (08/09/2026) |
+| **Intel Wi-Fi 6/6E/7** (AX201, AX210, AX211, BE200...), **9000** (9560, 9260) | **Intel DSA** (deteta sozinho) ou pacote oficial **24.70.0** (08/09/2026) |
+| **Intel Wi-Fi 6 AX200 / Killer AX1650** | Pacote **proprio** e **em fim de vida**: **24.20.2.1** — o 24.70.0 **nao** cobre este chip (seccao 4e) |
 | **Killer** (AX1650, Wi-Fi 6/7 Killer) | **Intel Killer Performance Suite** (não o pacote genérico) |
 | **MediaTek / RZ608 / RZ616 / MT79xx** (muito comum em placas AMD) | Site do **fabricante da placa-mãe** — o DSA **não** deteta estes |
 | **Realtek (RTL88xx)**, **Qualcomm/Atheros**, **Broadcom** | Fabricante da placa-mãe (ou do dongle USB) |
@@ -253,10 +254,13 @@ A versão atual do pacote Wi-Fi é a **24.70.0** (08/09/2026, ficheiro
 Wi-Fi 6E (AX411/AX211/AX210), Wi-Fi 6 (AX231/AX203/AX201) e 9000 (9560/9260/9462/9461)
 [4](https://www.intel.com/content/www/us/en/support/products/130293/wireless/intel-wi-fi-6-products/intel-wi-fi-6-series/intel-wi-fi-6-ax201-gig.html).
 
-**Sem DSA (manual):** página oficial
+**Se tens um AX200 (ou Killer AX1650): para.** Este chip tem pacote proprio e esta em fim de
+vida — o instalador generico 24.70.0 **nao** o cobre e ainda bloqueia o correto. Salta para a
+seccao **4e** e segue os links de la.
+
+**Sem DSA (manual, para os chips não-AX200):** pagina oficial
 <https://www.intel.com/content/www/us/en/download/19351/intel-wireless-wi-fi-drivers-for-windows-10-and-windows-11.html>
-→ aceitar a licença → descarregar → correr → reiniciar. (O AX200 e alguns 8xxx têm pacote
-próprio — outro motivo para preferir o DSA.)
+→ aceitar a licença → descarregar → correr → reiniciar. Alguns 8xxx têm pacote próprio.
 
 **Alternativas sem instalar nada:** Definições → Windows Update → Opções avançadas →
 **Atualizações opcionais → Atualizações de controladores** (menos recentes que o DSA), ou o
@@ -331,6 +335,105 @@ estava aqui — e isso também é uma resposta útil.
 - Desativar IPv6, "otimizadores" de registo, `netsh int tcp` sem critério — mito, ou pior.
 - Desligar o Bluetooth (partilha antena em chips combo, efeito marginal).
 - Trocar o canal da Wi-Fi: só ajuda quando são **outras** redes a interferir.
+
+---
+
+## 4e. Intel Wi-Fi 6 AX200 160MHz (o teu adaptador)
+
+### O essencial
+
+| | |
+|---|---|
+| **Wi-Fi** | Pacote **próprio**: `WiFi-24.20.2-Driver64-Win10-Win11.exe` — driver final **24.20.2.1** |
+| **Bluetooth** | Pacote **próprio**: `BT-24.10.0-64UWD-Win10-Win11.exe` — driver final **24.10.0.4** |
+| **Estado** | **End of Life**: 24.20.2.1 é a última versão que existirá para este chip |
+| **Página oficial** | <https://www.intel.com/content/www/us/en/download/915475/intel-wireless-wi-fi-drivers-for-intel-wi-fi-6-ax200.html> |
+
+> ⚠️ **Não instales o pacote genérico 24.60/24.70** (o de "Wi-Fi 7/6E/6/9000"). **O AX200 não
+> está incluído** nesse pacote: ele não instala nada no teu adaptador, mas **regista-se** como
+> versão mais recente e a partir daí o instalador correto (24.20.2) falha com
+> *"A newer product version is already installed"*. Há relatos disto na comunidade Intel.
+> Se isso te acontecer, a solução é remover o registo do pacote errado:
+>
+> ```powershell
+> # 1) procura o cache do pacote instalado por engano
+> Get-ChildItem 'C:\ProgramData\Package Cache' -Recurse -Filter 'WirelessSetup.exe' -ErrorAction SilentlyContinue |
+>   Select-Object FullName, LastWriteTime
+>
+> # 2) no PowerShell como ADMINISTRADOR, corre o desinstalador que está no cache (substitui o caminho)
+> & "C:\ProgramData\Package Cache\{GUID}\WirelessSetup.exe" /uninstall UninstallEnabled=1
+> ```
+>
+> Instalar por cima (substituindo o adaptador no Gestor de Dispositivos ou com `pnputil`) **não**
+> limpa esse registo — só o passo 2 acima resolve.
+
+### Como atualizar (passo a passo, só para o teu chip)
+
+1. **Antes de tudo, aponta a versão atual** (para saberes se valeu a pena):
+   ```powershell
+   Get-NetAdapter -Physical | Where-Object { $_.InterfaceDescription -match 'AX200' } |
+     Format-List Name, DriverVersion, DriverDate
+   ```
+   Se estiver em `22.x`/`23.x` (o teu é de **2021-08-19**), há mesmo um salto grande a fazer.
+2. Abre a página: <https://www.intel.com/content/www/us/en/download/915475/intel-wireless-wi-fi-drivers-for-intel-wi-fi-6-ax200.html>
+3. Em *Available Downloads*, aceita a licença e descarrega **`WiFi-24.20.2-Driver64-Win10-Win11.exe`** (≈44 MB).
+4. **Fecha o jogo/Steam** e corre o `.exe` → *Install* → **reinicia** quando ele pedir.
+5. Confirma: `Get-NetAdapter -Physical | Where-Object { $_.InterfaceDescription -match 'AX200' } | Format-List DriverVersion, DriverDate` → deve dar **24.20.2.1**.
+6. O Bluetooth é **outro** pacote (`BT-24.10.0-64UWD-Win10-Win11.exe`, página
+   <https://www.intel.com/content/www/us/en/download/874349/intel-wireless-bluetooth-driver-for-intel-wi-fi-6-ax200.html>).
+   Só faz sentido se tiveres problemas de Bluetooth — para velocidade de rede é indiferente.
+7. Guarda o `.exe` numa pasta: como o chip está em EOL, esta é a última versão que vais instalar
+   e é útil tê-la à mão para reinstalações.
+
+**E o Intel DSA?** Para o AX200 é fraco: como o produto está em EOL, o DSA pode não oferecer
+nada, ou oferecer o pacote genérico (o que dá no erro descrito acima). Neste chip, usa os links
+diretos desta secção.
+
+### Se o AX200 estiver lento apesar de tudo (checklist conhecido)
+
+O AX200 tem um conjunto de problemas documentados pela comunidade — todos reversíveis, e o
+`desligar-poupanca-wifi.ps1 -Aplicar` cobre os primeiros quatro:
+
+1. **Autotuning do TCP desligado** — o mais citado: em muitas máquinas o Windows tem-no em
+   `disabled`/`restricted` e o AX200 não passa dos 50-100 Mbps. Ver e corrigir:
+   ```powershell
+   netsh int tcp show global                 # procura "Receive Window Auto-Tuning Level"
+   netsh int tcp set global autotuninglevel=normal   # (administrador)
+   ```
+   Se estava em `disabled`, repete o teste de velocidade antes/depois.
+2. **Poupança de energia** no adaptador (Gestão de energia) e no plano (*Máximo desempenho*),
+   `Power Saving Mode = Maximum Performance`, `U-APSD = Disabled`, `MIMO Power Save Mode = No SMPS`.
+3. **Offloads de WoWLAN** — desliga e testa (são os que mais aparecem nas queixas do AX200):
+   `ARP Offload for WoWLAN`, `NS Offload for WoWLAN`, `Sleep on WoWLAN`, `Packet Coalescing`.
+4. **`Large Send Offload (LSO)`** — em algumas máquinas Windows 11 com Hyper-V/VirtualBox, o
+   LSO na interface virtual limita o Wi-Fi. Testa `Disabled` **na interface virtual**, não na
+   Wi-Fi, e mede.
+5. **160 MHz vs 80 MHz** — o "160MHz" no nome é capacidade, não garantia: em canais DFS
+   (5250-5725 MHz) uma deteção de radar faz o router recuar para 80/40 MHz. Se vês
+   `netsh wlan show interfaces` com *Channel Width* a 80 ou 40 MHz e débito de 300-500 Mbps,
+   o limite é o router/canal, não o adaptador. Testa **80 MHz fixo** no router: em muitos casos
+   é mais estável e mais rápido na prática do que 160 MHz a oscilar.
+6. **Antenas** — é uma placa M.2: se o cabo da antena estiver mal ligado ou as antenas
+   encostadas à caixa, perdes 10-20 dB. Testa trocar a ordem dos conectores (já resolveu casos
+   reais) e afasta as antenas do chão/metal.
+7. **Software do fabricante** — vários relatos de AX200 lentos em placas MSI/ASUS AMD acabaram
+   com a remoção dos utilitários de rede do fabricante (MSI LAN Manager / Dragon / GameFirst)
+   e das extensões de "aceleração" (cFosSpeed). Isto cruza com o que está na secção 4b.
+
+### O que esperar (para calibrar o teu caso)
+
+| Cenário | Velocidade realista de download |
+|---|---|
+| Cabo (I219/I225 a 1 Gbps, router Gigabit) | **900-940 Mbps** |
+| Wi-Fi 6, 5 GHz, 80 MHz, a 2-3 m do router | **400-700 Mbps** |
+| Wi-Fi 6, 5 GHz, **160 MHz**, a 1-2 m, canal limpo | **700-1200 Mbps** |
+| Wi-Fi a 10-15 m ou com paredes | **100-400 Mbps** |
+| **Aqui está o teu problema se estiver a dar ~10 Mbps** | Não é "Wi-Fi lento": é **throttle** (Steam/router/software) — ver secções 3, 4b e 8 |
+
+> Para descarregar o BF6, o cabo ganha sempre ao AX200: 940 Mbps estáveis contra 400-1200 Mbps
+> que oscilam com o canal. Usa o Wi-Fi para o dia-a-dia e o **cabo para os downloads grandes** —
+> e desliga a Wi-Fi nos testes, para não haver dúvidas sobre por onde sai o tráfego (secção 1c
+> do script).
 
 ---
 
@@ -473,8 +576,9 @@ Depois:
 7. [ ] **Chip de rede (Intel?)**: driver atualizado, `Speed & Duplex = Auto`, EEE desligado,
    e sem **Killer Control Center / GameFirst / Intel Connectivity Performance Suite** com
    perfil de limite de banda (secção 4b).
-7b. [ ] **Wi-Fi**: driver atualizado (DSA) e poupança de energia desligada no adaptador **e**
-   no plano de energia (secções 4d, passo 2 e 3) — e medir com a Wi-Fi desligada, por cabo.
+7b. [ ] **Wi-Fi (AX200)**: driver **24.20.2.1** pelo link proprio (nao pelo 24.70.0 — seccao
+   4e), poupanca desligada no adaptador **e** no plano de energia (4d, passos 2 e 3),
+   `netsh int tcp set global autotuninglevel=normal`, e medir **com a Wi-Fi desligada**, por cabo.
 8. [ ] Testar o mesmo ficheiro em hora de ponta e fora dela (peering/CDN).
 9. [ ] Se tudo isto falhar: testar diretamente ligado ao ONT/modem do ISP, e só depois
    abrir ticket no ISP com os números do relatório (velocidade, perda, jitter, MTU, horário).

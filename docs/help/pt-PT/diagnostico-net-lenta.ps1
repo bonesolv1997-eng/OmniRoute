@@ -255,6 +255,14 @@ try {
                     Warn ("'" + $e.DisplayName + "' está LIGADO em " + $n.Name + ". Em NICs Intel (sobretudo I225/I226 e I219) isto provoca quedas de link e velocidade baixa/errática. Desliga em: Gestor de Dispositivos > adaptador > Propriedades > Avançadas.")
                 }
             }
+            # Offloads de WoWLAN: causa conhecida de Wi-Fi lento em alguns chips Intel
+            # (sobretudo AX200/AX201). São inocuos de desligar — testa um de cada vez.
+            $off = $adv | Where-Object { $_.DisplayName -match 'Offload for WoWLAN|WoWLAN|Packet Coalescing|ARP Offload|NS Offload' }
+            $ligados = @($off | Where-Object { $_.DisplayValue.Trim() -match '^(Enabled|On|Ativado|Habilitado|Yes|Ligado|Sim)$' })
+            if ($ligados.Count -gt 0) {
+                foreach ($e in $ligados) { Sub ("    " + $e.DisplayName + " = " + $e.DisplayValue) }
+                Warn ("Há " + $ligados.Count + " offload(s) de WoWLAN ligados em " + $n.Name + " ('" + $ligados[0].DisplayName + "', ...). Em chips Intel AX200/AX201 há relatos de Wi-Fi lento com estes offloads ligados: desliga-os UM de cada vez e mede com medir-velocidade.ps1 (Gestor de Dispositivos > adaptador > Propriedades > Avançadas).")
+            }
         }
 
         # Gestão de energia do adaptador
@@ -605,6 +613,31 @@ Info "Nota: o Steam instala com centenas de ficheiros pequenos — a velocidade 
 # ────────────────────────────────────────────────────────────────────────────
 # 7. Interceção TLS: ficheiros hosts e certificados
 # ────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
+# 6b. Opções TCP globais do Windows (autotuning do receive window)
+#     Quando isto está desligado, muitos adaptadores (sobretudo Intel AX200)
+#     não passam dos 50-100 Mbps em downloads grandes. É um clássico.
+# ────────────────────────────────────────────────────────────────────────────
+Titulo "6b. Opções TCP globais do Windows"
+try {
+    $tcp = (netsh int tcp show global) -join "`n"
+    foreach ($linha in ($tcp -split "`n")) {
+        if ($linha.Trim()) { Sub ($linha.Trim()) }
+    }
+    $autotune = [regex]::Match($tcp, '(?im)^\s*(Receive Window Auto-Tuning Level|N.vel de ajuste autom.tico da janela de recep..o|Auto-Tuning Level)[^:]*:\s*(\S+)')
+    if ($autotune.Success) {
+        $nivel = $autotune.Groups[2].Value.Trim().ToLowerInvariant()
+        if ($nivel -match '^(disabled|restricted|desativado|restrito|highlyrestricted)') {
+            Warn ("O auto-tuning da janela TCP está em '" + $autotune.Groups[2].Value + "'. Isto trava o débito em ligações de alta latência (e é uma causa citada de AX200 lento). Corrige como administrador: netsh int tcp set global autotuninglevel=normal")
+        } else {
+            Ok ("Auto-tuning da janela TCP em '" + $autotune.Groups[2].Value + "' (normal).")
+        }
+    }
+    if ($tcp -match '(?im)^\s*(Chimney Offload State|TCP Chimney Offload)[^:]*:\s*(enabled|ativado)') {
+        Warn "TCP Chimney Offload está ligado — em placas Intel antigas já causou débito baixo. Testa: netsh int tcp set global chimney=disabled"
+    }
+} catch { Warn ("Não consegui ler as opções TCP globais: " + $_.Exception.Message) }
+
 Titulo "7. Interceção TLS (hosts + certificados raiz)"
 $hostsPath = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
 try {

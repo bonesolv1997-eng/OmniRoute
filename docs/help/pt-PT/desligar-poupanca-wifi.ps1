@@ -59,7 +59,12 @@ foreach ($a in $adapta) {
     $onde = ""
     if ($desc -match 'Intel|Killer') {
         $fabricante = 'Intel'
-        if ($desc -match 'BE2\d\d|AX2\d\d|AX411|AX211|AX210|AX203|AX201|AX200|AX101|9[0-9]{3}|Wireless-AC') {
+        if ($desc -match 'AX200|AX1650') {
+            # Caso especial: AX200 (e o gémeo Killer AX1650) tem pacote PRÓPRIO e está EOL.
+            # O pacote genérico (24.60/24.70) NÃO instala nada neste chip e ainda regista
+            # uma versão mais recente que depois BLOQUEIA o instalador correto.
+            $onde = "ATENÇÃO — AX200: usa o pacote PRÓPRIO e final 'WiFi-24.20.2-Driver64-Win10-Win11.exe' (driver 24.20.2.1, o último que existirá: o produto está End of Life). Link: https://www.intel.com/content/www/us/en/download/915475/intel-wireless-wi-fi-drivers-for-intel-wi-fi-6-ax200.html . NAO instales o pacote generico 24.60/24.70 (o de Wi-Fi 7/6E/6/9000): nao cobre o AX200 e ainda bloqueia a instalacao correta. Bluetooth: pacote proprio, final 24.10.0.4."
+        } elseif ($desc -match 'BE2\d\d|AX2\d\d|AX411|AX211|AX210|AX203|AX201|AX101|9[0-9]{3}|Wireless-AC') {
             $onde = "Intel DSA (recomendado) ou o pacote oficial 'Intel Wireless Wi-Fi Drivers' (versão atual 24.70.0, 08/09/2026). O DSA escolhe sozinho o pacote certo para o teu modelo."
         }
         if ($desc -match 'Killer') {
@@ -212,7 +217,16 @@ if ($Aplicar -or $Reverter) {
 # ────────────────────────────────────────────────────────────────────────────
 Titulo "4. Atualizar o driver (o que fazer à mão, passo a passo)"
 
-if ($fabricante -eq 'Intel') {
+$temAX200 = @($adapta | Where-Object { $_.InterfaceDescription -match 'AX200|AX1650' }).Count -gt 0
+if ($temAX200) {
+    Write-Host "  AX200 detetado — pacote PRÓPRIO (o genérico 24.70.0 NÃO serve):" -ForegroundColor White
+    Write-Host "    1. Página: https://www.intel.com/content/www/us/en/download/915475/intel-wireless-wi-fi-drivers-for-intel-wi-fi-6-ax200.html" -ForegroundColor Gray
+    Write-Host "    2. Descarrega WiFi-24.20.2-Driver64-Win10-Win11.exe (driver final 24.20.2.1)." -ForegroundColor Gray
+    Write-Host "    3. Fecha o Steam/jogo, corre o .exe, instala e reinicia." -ForegroundColor Gray
+    Write-Host "    4. Confirma: Get-NetAdapter -Physical | Where-Object InterfaceDescription -match 'AX200' | Format-List DriverVersion, DriverDate" -ForegroundColor Gray
+    Write-Host "    Bluetooth (separado, se precisares): https://www.intel.com/content/www/us/en/download/874349/intel-wireless-bluetooth-driver-for-intel-wi-fi-6-ax200.html" -ForegroundColor Gray
+    Write-Host "    Nota: o produto está End of Life — guarda este .exe para reinstalações futuras." -ForegroundColor DarkGray
+} elseif ($fabricante -eq 'Intel') {
     Write-Host "  Opção A — Intel DSA (recomendada, deteta sozinho):" -ForegroundColor White
     Write-Host "    1. Abre https://www.intel.com/content/www/us/en/support/detect.html" -ForegroundColor Gray
     Write-Host "    2. Clica 'Download now', corre o instalador (UAC: Sim) e deixa instalar." -ForegroundColor Gray
