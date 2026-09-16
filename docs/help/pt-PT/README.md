@@ -99,11 +99,31 @@ Este passo de 30 segundos identifica a maioria dos casos sozinho.
 > | Diagnóstico completo | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\diagnostico-net-lenta.ps1"` |
 > | Teste de velocidade | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\medir-velocidade.ps1"` |
 > | Wi-Fi (só ver) | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\desligar-poupanca-wifi.ps1"` |
-> | Wi-Fi (aplicar) | abrir PowerShell **como administrador** e correr a linha anterior com `-Aplicar` no fim |
+> | Wi-Fi (aplicar) | bloco **"Aplicar o Wi-Fi (eleva-se sozinho)"** logo abaixo — ou abrir PowerShell **como administrador** e correr a linha anterior com `-Aplicar` no fim |
 >
 > Os caminhos acima são **absolutos** (`$env:TEMP\...`) e não têm `.\`: é isso que os torna à
 > prova de "não existe". Se o ficheiro ainda não estiver lá, usa primeiro o `baixar-kit.ps1`
 > (bloco mais abaixo) ou o menu do kit.
+
+**Aplicar o Wi-Fi (eleva-se sozinho).** Cola isto: descarrega o script, desbloqueia e abre a
+janela de administrador já a correr com `-Aplicar` (aceita o UAC → **Sim**). A janela fica
+aberta no fim para poderes ler o resultado:
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$d = "$env:TEMP\omniroute-kit"; New-Item -ItemType Directory -Path $d -Force | Out-Null
+$f = "$d\desligar-poupanca-wifi.ps1"
+Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/bonesolv1997-eng/OmniRoute/arena/01a0aae0-omniroute/docs/help/pt-PT/desligar-poupanca-wifi.ps1' -OutFile $f
+Unblock-File $f
+Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-NoExit","-File","`"$f`"","-Aplicar"
+```
+
+Se o UAC não estiver disponível (PC gerido por empresa), abre o PowerShell como administrador
+e corre: `& "$env:TEMP\omniroute-kit\desligar-poupanca-wifi.ps1" -Aplicar`
+
+> Nota para todos os comandos desta secção: se o ficheiro estiver em `%TEMP%` e o comando tiver
+> `.\`, dá sempre *"The argument ... does not exist"*. Troca o `.\nome.ps1` por
+> `"$env:TEMP\nome.ps1"` ou usa o menu.
 
 **Caminho mais fácil (Windows):** guarda o **`kit.cmd`** (ou a pasta inteira `docs/help/pt-PT`
 do branch `arena/01a0aae0-omniroute`) e **faz duplo clique nele** — abre o menu com todas as
@@ -283,8 +303,10 @@ com o Wi-Fi desligado. O ficheiro `checar-nic-macos-linux.sh` deste kit faz esta
 ## 4d. Atualizar o driver do Wi-Fi e desligar a poupança de energia (passo a passo)
 
 > Há um script que faz isto por ti, com modo de teste: `desligar-poupanca-wifi.ps1`
-> (sem argumentos = só mostra; `-Aplicar` como administrador = aplica). Abaixo está o
-> equivalente à mão, para fazeres no interface.
+> (sem argumentos = só mostra; `-Aplicar` como administrador = aplica). O comando que
+> descarrega **e** aplica sem te preocupares com pastas está na secção 1b, em
+> *"Aplicar o Wi-Fi (eleva-se sozinho)"*. Abaixo está o equivalente à mão, para fazeres no
+> interface.
 
 ### Passo 0 — Saber que chip tens (decide tudo o resto)
 
