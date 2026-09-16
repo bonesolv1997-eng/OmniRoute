@@ -35,6 +35,11 @@ em algum sítio**: limite do Steam, QoS do router, software de fabricante, ou um
 powershell -ExecutionPolicy Bypass -File .\diagnostico-net-lenta.ps1
 ```
 
+```powershell
+# Windows — teste rápido de 30 s (interface + latência + velocidade real)
+powershell -ExecutionPolicy Bypass -File .\medir-velocidade.ps1
+```
+
 ```bash
 # macOS / Linux
 bash diagnostico-net-lenta.sh
@@ -364,10 +369,37 @@ Depois:
 | Speedtest CLI (`speedtest -s <id do servidor>`) | Comparar com o servidor do operador |
 | `curl -o NUL https://speed.hetzner.de/100MB.bin` | Teste de 100 MB sem interface web |
 | Cloudflare Speed Test / Waveform Bufferbloat | Latência sob carga (bufferbloat) |
+| `medir-velocidade.ps1` (deste kit) | A/B rápido: interface + latência + velocidade em 30 s |
 | CrystalDiskInfo / `smartctl` | Saúde e velocidade do disco |
 | Intel Driver & Support Assistant (DSA) | Deteta e atualiza driver da NIC Intel |
 | `ethtool -S eth0` / `ethtool --show-eee eth0` | Erros de descarte e estado do EEE (Linux) |
 | WiFi Analyzer / `netsh wlan show interfaces` | Canal, banda e sinal Wi-Fi |
+
+---
+
+## Apêndice — caso real em que este kit foi usado (2026-09)
+
+Placa-mãe AMD, NIC Intel (Ethernet) + Wi-Fi, linha 1000/100 Mbps, BF6 na Steam a
+4,7 GB/hora. O relatório do kit dizia:
+
+| Observação do relatório | Leitura | Ação |
+|---|---|---|
+| "A porta de rede negociou apenas 1 Gbps" | **Falso positivo do script** (o Windows devolve `LinkSpeed = "1 Gbps"` localizado) — corrigido: 1 Gbps = 1000 Mbps = link perfeito | (nada a fazer — o cabo/porta estão bons) |
+| "O Steam guarda aqui o limite de largura de banda" | **O Steam tem limite de downloads configurado** | Steam → Definições → Downloads → tirar o limite |
+| "Máximo de 54,3 Mbps" (Cloudflare + Steam CDN; Hetzner falhou) | A linha/PC entrega **~6 % do plano** | Ver interface: Wi-Fi ou cabo? |
+| Wi-Fi **E** cabo ligados ao mesmo tempo; Wi-Fi com driver de **2021** e poupança de energia ligada | Rota pode estar a sair pela Wi-Fi | Desligar Wi-Fi, medir outra vez com `medir-velocidade.ps1` |
+| `Green Ethernet` + `Gigabit Lite` **ligados** na Intel | Causa clássica de link errático/velocidade baixa em I219/I225/I226 | Desligar nas Propriedades Avançadas |
+| `Speed & Duplex` forçado a `1.0 Gbps Full Duplex` | Não limita (a placa é 1G), mas Auto é mais seguro | Pôr em Auto Negotiation |
+| 3703 pacotes descartados | Cabo/porta ou link saturado | Trocar cabo e porta do router, repetir |
+
+Sequência de resolução (o que fazer por esta ordem): **limite do Steam → desligar a Wi-Fi e
+medir por cabo → Green Ethernet/Gigabit Lite off + driver Wi-Fi atualizado → trocar cabo/porta
+→ se continuar a ~54 Mbps com cabo, testar direto no ONT e abrir ticket no ISP** com o `.txt`
+do relatório.
+
+> Lição do kit: `LinkSpeed`, `DisplayValue` e afins vêm **localizados** ("1 Gbps", "1,0 Gbps")
+> — qualquer leitura de velocidade tem de distinguir Gbps de Mbps (o `ConvertTo-Mbps` do
+> script faz isso) e os contadores são **cumulativos desde o arranque**, não "agora".
 
 ---
 

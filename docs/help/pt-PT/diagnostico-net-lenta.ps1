@@ -62,6 +62,21 @@ function Erro($texto) {
 }
 function Info($texto) { Write-Host ("  [i]     " + $texto) -ForegroundColor DarkCyan }
 
+function ConvertTo-Mbps($texto) {
+    # "1 Gbps" -> 1000 | "2,5 Gbps"/"2.5 Gbps" -> 2500 | "100 Mbps" -> 100 | "Auto" -> 0
+    # (LinkSpeed e DisplayValue vem localizados: "1 Gbps" nao pode ser lido como 1 Mbps.)
+    if (-not $texto) { return 0 }
+    $t = ($texto -replace '\s', '')
+    $fator = 1
+    if ($t -match '(?i)gbps') { $fator = 1000 }
+    elseif ($t -match '(?i)kbps') { $fator = 0.001 }
+    elseif ($t -match '(?i)mbps') { $fator = 1 }
+    if (-not ($t -match '([\d\.,]+)')) { return 0 }
+    $numStr = $matches[1] -replace ',', '.'
+    try { $num = [double]::Parse($numStr, [System.Globalization.CultureInfo]::InvariantCulture) } catch { return 0 }
+    return [int][math]::Round($num * $fator)
+}
+
 Write-Host ""
 Write-Host "  DIAGNÓSTICO DE REDE — iniciado $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor White
 Write-Host "  Máquina: $env:COMPUTERNAME   Utilizador: $env:USERNAME" -ForegroundColor DarkGray
@@ -123,11 +138,9 @@ try {
         $tipo = if ($a.PhysicalMediaType) { $a.PhysicalMediaType } else { $a.MediaType }
         Sub ($a.Name + "  [" + $a.InterfaceDescription + "]")
         Sub ("    Tipo: " + $tipo + "   |   Velocidade negociada: " + $a.LinkSpeed + "   |   Duplex: " + $a.FullDuplex)
-        if ($a.LinkSpeed -match '^(\d+)') {
-            $mbps = [int]$matches[1]
-        } else { $mbps = 0 }
-        if ($mbps -lt 1000 -and $tipo -notmatch 'Wireless|802\.11|Wi-Fi') {
-            Warn ("A porta de rede negociou apenas " + $a.LinkSpeed + ". Numa ligação de 1 Gbps isto é o teto: cabo CAT5e/6 danificado, porta de router 100M, ou switch/managed mal configurado.")
+        $mbps = ConvertTo-Mbps $a.LinkSpeed
+        if ($mbps -gt 0 -and $mbps -lt 1000 -and $tipo -notmatch 'Wireless|802\.11|Wi-Fi') {
+            Warn ("A porta de rede negociou apenas " + $a.LinkSpeed + " (" + $mbps + " Mbps). Numa ligação de 1 Gbps isto é o teto: cabo CAT5e/6 danificado, porta de router a 100 Mbps, ou switch mal configurado.")
         }
     }
     # Wi-Fi
@@ -179,37 +192,41 @@ try {
 #     (Intel I219 = 1 Gbps; I225/I226 = 2,5 Gbps com defeitos conhecidos de
 #      negociação; "Killer" = marca Intel com limite de banda por aplicação)
 # ────────────────────────────────────────────────────────────────────────────
+# 1b. Chip de rede, driver e propriedades que estrangulam
+#     (Intel I217/I218/I219 = 1 Gbps; I225/I226 = 2,5 Gbps com defeitos
+#      conhecidos de negociação; "Killer" = marca Intel com limite por app)
+# ────────────────────────────────────────────────────────────────────────────
 Titulo "1b. Chip de rede, driver e propriedades que estrangulam"
 try {
     $nics = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' }
     foreach ($n in $nics) {
-        Sub ($n.Name + "  [" + $n.InterfaceDescription + "]   estado=" + $n.Status)
+        Sub ($n.Name + "  [" + $n.InterfaceDescription + "]   estado=" + $n.Status + "   link=" + $n.LinkSpeed)
         $dd = ""
         try { if ($n.DriverDate) { $dd = ([datetime]$n.DriverDate).ToString('yyyy-MM-dd') } } catch { }
-        Sub ("    Driver: " + $n.DriverProvider + " " + $n.DriverVersion + "  (" + $dd + ")")
+        Sub ("    Driver: " + $n.DriverProvider + " " + $n.DriverVersion + "   (" + $dd + ")")
         try {
             if ($n.DriverDate -and ([datetime]$n.DriverDate) -lt (Get-Date).AddYears(-3)) {
-                Warn ("O driver de " + $n.Name + " e de " + $dd + " (mais de 3 anos). Nas NICs Intel isto explica quedas de link e velocidade erratica — atualiza com o Intel Driver & Support Assistant (DSA).")
+                Warn ("O driver de " + $n.Name + " é de " + $dd + " (mais de 3 anos). Em NICs Intel isto explica quedas de link e velocidade errática — atualiza com o Intel Driver & Support Assistant (DSA).")
             }
         } catch { }
 
-        # Notas por modelo (Intel e "Killer", que hoje e Intel)
+        # Notas por modelo (Intel e "Killer", que hoje é Intel)
         if ($n.InterfaceDescription -match 'Intel|Killer') {
             if ($n.InterfaceDescription -match 'I225|I226') {
                 Warn ("Intel I225/I226 (2,5 Gbps) detetada. Casos conhecidos: o link cai para 100 Mbps ou 1 Gbps com 'Energy Efficient Ethernet' ligado, driver antigo, ou certos routers/switches. Atualiza o driver e desliga EEE/Green Ethernet.")
             } elseif ($n.InterfaceDescription -match 'I219|I218|I217') {
-                Sub "    Nota: I219/I218 e uma NIC de 1 Gbps — o teto pratico e ~940 Mbps."
+                Sub "    Nota: I219/I218 é uma NIC de 1 Gbps — o teto prático é ~940 Mbps."
             } elseif ($n.InterfaceDescription -match 'I210|I211|I350') {
-                Sub "    Nota: I210/I211/I350 e uma NIC de 1 Gbps (server-grade)."
+                Sub "    Nota: I210/I211/I350 é uma NIC de 1 Gbps (server-grade)."
             } elseif ($n.InterfaceDescription -match 'X520|X540|X550|X710') {
-                Sub "    Nota: serie X5xx/X7xx = 10 Gbps — confirma que o router/switch tambem e 10G ou 2,5G."
+                Sub "    Nota: série X5xx/X7xx = 10 Gbps — confirma que o router/switch também é 10G ou 2,5G."
             }
             if ($n.InterfaceDescription -match 'Killer|Connectivity Performance') {
-                Warn "Esta placa e 'Killer' (marca Intel). O Killer Control Center / Intel Connectivity Performance Suite tem controlo de largura de banda POR APLICACAO — abre-o e confirma que nao ha um limite de download (o classico e 10 Mbps)."
+                Warn "Esta placa é 'Killer' (marca Intel). O Killer Control Center / Intel Connectivity Performance Suite tem controlo de largura de banda POR APLICAÇÃO — abre-o e confirma que não há limite de download (o clássico é 10 Mbps)."
             }
         }
 
-        # Propriedades avancadas: Speed & Duplex e poupancas de energia
+        # Propriedades avançadas: Speed & Duplex e poupanças de energia
         $adv = @()
         try { $adv = @(Get-NetAdapterAdvancedProperty -Name $n.Name -ErrorAction Stop) } catch { }
         if ($adv.Count -gt 0) {
@@ -218,40 +235,39 @@ try {
                 Sub ("    " + $sd.DisplayName + " = " + $sd.DisplayValue)
                 $maxMbps = 0
                 foreach ($v in ($sd.ValidDisplayValues | Select-Object -Unique)) {
-                    $m = 0
-                    if ($v -match '([\d\.,]+)\s*Gbps') { $m = [double]($matches[1] -replace ',', '.') * 1000 }
-                    elseif ($v -match '(\d+)\s*Mbps') { $m = [double]$matches[1] }
-                    else { continue }
+                    $m = ConvertTo-Mbps $v
                     if ($m -gt $maxMbps) { $maxMbps = $m }
                 }
-                if ($maxMbps -gt 0) { Sub ("    Velocidade maxima suportada pela placa: " + $maxMbps + " Mbps") }
+                if ($maxMbps -gt 0) { Sub ("    Velocidade máxima suportada pela placa: " + $maxMbps + " Mbps") }
                 if ($sd.DisplayValue -notmatch 'Auto|Autom') {
-                    Warn ("'" + $sd.DisplayName + "' esta FORCADO a '" + $sd.DisplayValue + "' em vez de Auto Negotiation (em " + $n.Name + "). Se for 100 Mbps, o teto da linha inteira passa a ~94 Mbps.")
-                }
-                if ($maxMbps -gt 0 -and $maxMbps -le 100) {
-                    Warn ("A placa " + $n.Name + " so suporta 100 Mbps (Fast Ethernet) — seria o teto absoluto, independentemente do plano.")
+                    $forcado = ConvertTo-Mbps $sd.DisplayValue
+                    if ($maxMbps -gt 0 -and $forcado -gt 0 -and $forcado -lt $maxMbps) {
+                        Warn ("'" + $sd.DisplayName + "' está FORÇADO a '" + $sd.DisplayValue + "' mas a placa suporta " + $maxMbps + " Mbps. Estás a estrangular o link a " + $forcado + " Mbps — põe em Auto Negotiation.")
+                    } else {
+                        Sub ("    Nota: '" + $sd.DisplayName + "' está forçado a '" + $sd.DisplayValue + "'. Não te está a limitar (a placa suporta o mesmo ou mais), mas Auto Negotiation é mais seguro — se o link andar instável, volta a Auto.")
+                    }
                 }
             }
             $eco = $adv | Where-Object { $_.DisplayName -match 'Energy Efficient|Green Ethernet|Eco|Gigabit Lite|Reduce Speed|Reduce Link|Power Saving|Ultra Low Power|Low Power|Power Management' }
             foreach ($e in $eco) {
                 Sub ("    " + $e.DisplayName + " = " + $e.DisplayValue)
                 if ($e.DisplayValue.Trim() -match '^(Enabled|On|Ativado|Habilitado|Yes|Ligado|Sim)$') {
-                    Warn ("'" + $e.DisplayName + "' esta LIGADO em " + $n.Name + ". Em NICs Intel (sobretudo I225/I226 e I219) isto provoca quedas de link e velocidade baixa/erratica. Desliga-o: Gestor de Dispositivos > adaptador > Propriedades > Avancadas.")
+                    Warn ("'" + $e.DisplayName + "' está LIGADO em " + $n.Name + ". Em NICs Intel (sobretudo I225/I226 e I219) isto provoca quedas de link e velocidade baixa/errática. Desliga em: Gestor de Dispositivos > adaptador > Propriedades > Avançadas.")
                 }
             }
         }
 
-        # Gestao de energia do adaptador
+        # Gestão de energia do adaptador
         try {
             $pm = Get-NetAdapterPowerManagement -Name $n.Name -ErrorAction Stop
             if ($pm.AllowComputerToTurnOffDevice -and $pm.AllowComputerToTurnOffDevice -ne 'Unsupported') {
                 if ($pm.AllowComputerToTurnOffDevice -match 'Enabled') {
-                    Warn ("Gestao de energia de " + $n.Name + ": 'Permitir que o computador desligue este dispositivo para poupar energia' esta ligado. Desliga em Gestor de Dispositivos > adaptador > Propriedades > Gestao de energia.")
+                    Warn ("Gestão de energia de " + $n.Name + ": 'Permitir que o computador desligue este dispositivo para poupar energia' está ligado. Desliga em Gestor de Dispositivos > adaptador > Propriedades > Gestão de energia.")
                 }
             }
         } catch { }
     }
-} catch { Warn ("Analise das placas de rede falhou: " + $_.Exception.Message) }
+} catch { Warn ("Análise das placas de rede falhou: " + $_.Exception.Message) }
 
 # Software de fabricante / terceiros que pode limitar largura de banda
 try {
@@ -265,25 +281,65 @@ try {
         Where-Object { $_.DisplayName -and $_.DisplayName -match $padrao } |
         Select-Object DisplayName, DisplayVersion -Unique
     if ($progs) {
-        Sub "Software de gestao/aceleracao de rede instalado (candidato a limite de banda):"
+        Sub "Software de gestão/aceleração de rede instalado (candidato a limite de banda):"
         foreach ($pr in $progs) { Sub ("    " + $pr.DisplayName + "  " + $pr.DisplayVersion) }
-        Warn "Existe software de gestao de rede instalado. Abre-o e confirma que nao ha um PERFIL com limite de download (o valor tipico de bloqueio e 10 Mbps). Se nao usas, desinstala — varios destes instalam filtros de rede proprios."
+        Warn "Existe software de gestão de rede instalado. Abre-o e confirma que não há um PERFIL com limite de download (o valor típico destes bloqueios é 10 Mbps). Se não usas, desinstala — vários instalam filtros de rede próprios."
     } else {
-        Ok "Sem software de gestao/limitacao de banda instalado (Killer/GameFirst/Turbo LAN/LAN Manager/NetLimiter/cFosSpeed/...)."
+        Ok "Sem software de gestão/limitação de banda instalado (Killer/GameFirst/Turbo LAN/LAN Manager/NetLimiter/cFosSpeed/...)."
     }
     $svcs = Get-Service -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match 'Killer|GameFirst|TurboLAN|NetLimiter|cFos|Speedify|WTFast|ExitLag|icps|IntelConnectivity|Dragon|NetBalanc' }
-    foreach ($sv in $svcs) { Sub ("Servico relacionado: " + $sv.Name + " (" + $sv.Status + ")") }
+    foreach ($sv in $svcs) { Sub ("Serviço relacionado: " + $sv.Name + " (" + $sv.Status + ")") }
 } catch { }
 
-# Estado do link: o que estao a negociar agora
+# ────────────────────────────────────────────────────────────────────────────
+# 1c. POR ONDE ESTÁ A SAIR O TRÁFEGO  — a pergunta que decide tudo quando há
+#     Wi-Fi e cabo ligados ao mesmo tempo (o Windows escolhe pela métrica).
+# ────────────────────────────────────────────────────────────────────────────
+Titulo "1c. Interface que transporta o tráfego (métricas de rota)"
+try {
+    $ifs = Get-NetIPInterface -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.ConnectionState -eq 'Connected' } |
+        Sort-Object InterfaceMetric
+    foreach ($i in $ifs) {
+        $ad = Get-NetAdapter -InterfaceIndex $i.ifIndex -ErrorAction SilentlyContinue
+        Sub ("Interface " + $i.InterfaceAlias + "  metric=" + $i.InterfaceMetric + "  link=" + $ad.LinkSpeed + "  [" + $ad.InterfaceDescription + "]")
+    }
+    $preferida = $ifs | Select-Object -First 1
+    if ($preferida) {
+        $adPref = Get-NetAdapter -InterfaceIndex $preferida.ifIndex -ErrorAction SilentlyContinue
+        Sub ("Rota preferida (menor métrica): " + $preferida.InterfaceAlias + " [" + $adPref.InterfaceDescription + "]")
+        $ehWifi = ($adPref.InterfaceDescription -match 'Wireless|Wi-Fi|802\.11|Wi-Fi') -or ($adPref.PhysicalMediaType -match '802\.11')
+        if ($ehWifi) {
+            Warn "O TRÁFEGO ESTÁ A SAIR PELA WI-FI, não pelo cabo! Se tens o cabo ligado, desliga a Wi-Fi (ou baixa a métrica do Ethernet) e volta a medir — é a diferença entre ~10-80 Mbps e ~940 Mbps."
+        }
+    }
+    $rotas = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Sort-Object RouteMetric
+    foreach ($r in $rotas) {
+        $ad = Get-NetAdapter -InterfaceIndex $r.ifIndex -ErrorAction SilentlyContinue
+        Sub ("Rota por omissão: via " + $r.InterfaceAlias + " -> " + $r.NextHop + "  (métrica " + $r.RouteMetric + ", " + $ad.InterfaceDescription + ")")
+    }
+    $ativas = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' }
+    $temWifi = $ativas | Where-Object { $_.PhysicalMediaType -match '802\.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi' }
+    $temCabo = $ativas | Where-Object { $_.PhysicalMediaType -match '802\.3' -and $_.InterfaceDescription -notmatch 'Wireless|Wi-Fi' }
+    if ($temWifi -and $temCabo) {
+        Warn "Há Wi-Fi E cabo ligados ao mesmo tempo. Para um teste limpo e para descarregar o BF6: desativa a Wi-Fi (ou põe a métrica da Wi-Fi bem mais alta) e confirma em '1c' que a rota preferida é o cabo."
+    }
+} catch { Warn ("Análise de rotas falhou: " + $_.Exception.Message) }
+
+# Estado do link, MTU e descartes
 try {
     foreach ($n in (Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' })) {
-        Sub ($n.Name + ": negociado " + $n.LinkSpeed + " | full duplex=" + $n.FullDuplex + " | MTU=" + $n.MtuSize + " | MAC=" + $n.MacAddress)
         $st = Get-NetAdapterStatistics -Name $n.Name -ErrorAction SilentlyContinue
+        $descartes = 0; $pct = 0
         if ($st) {
-            $erros = [int64]$st.ReceivedDiscardedPackets + [int64]$st.OutboundDiscardedPackets
-            if ($erros -gt 0) { Warn ("Contadores de descarte em " + $n.Name + ": " + $erros + " pacotes descartados. Cabo/porta com problemas, ou link saturado.") }
+            $descartes = [int64]$st.ReceivedDiscardedPackets + [int64]$st.OutboundDiscardedPackets
+            $rec = [int64]$st.ReceivedPackets
+            if ($rec -gt 0) { $pct = [math]::Round(100.0 * $descartes / $rec, 3) }
+        }
+        Sub ($n.Name + ": link=" + $n.LinkSpeed + " | full duplex=" + $n.FullDuplex + " | MTU=" + $n.MtuSize + " | MAC=" + $n.MacAddress + " | descartes desde o arranque=" + $descartes + " (" + $pct + "%)")
+        if ($descartes -gt 1000 -and $pct -gt 0.05) {
+            Warn ("Descartes significativos em " + $n.Name + ": " + $descartes + " pacotes (" + $pct + "% do recebido). Cabo/porta com problemas ou link saturado — troca o cabo e a porta do router, e repete.")
         }
     }
 } catch { }
@@ -712,11 +768,11 @@ if ($script:Falhas.Count -eq 0 -and $script:Alertas.Count -eq 0) {
     Ok "Nenhum problema detetado nesta passagem. Guarda o relatório e repete o teste a meio de um download lento."
 } else {
     if ($script:Falhas.Count -gt 0) {
-        Write-Host "  FALHAS (" + $script:Falhas.Count + "):" -ForegroundColor Red
+        Write-Host ("  FALHAS (" + $script:Falhas.Count + "):") -ForegroundColor Red
         foreach ($f in $script:Falhas) { Write-Host ("   ✗ " + $f) -ForegroundColor Red }
     }
     if ($script:Alertas.Count -gt 0) {
-        Write-Host "  ATENÇÃO (" + $script:Alertas.Count + "):" -ForegroundColor Yellow
+        Write-Host ("  ATENÇÃO (" + $script:Alertas.Count + "):") -ForegroundColor Yellow
         foreach ($a in $script:Alertas) { Write-Host ("   ! " + $a) -ForegroundColor Yellow }
     }
 }
