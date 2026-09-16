@@ -1,4 +1,4 @@
-<#
+﻿<#
     diagnostico-net-lenta.ps1  —  "a minha net ficou má" : uma passagem de diagnóstico
     ----------------------------------------------------------------------------------
     Corres isto quando algo está lento a transferir (Steam, Epic, downloads) e queres

@@ -56,6 +56,42 @@ Este passo de 30 segundos identifica a maioria dos casos sozinho.
 
 ---
 
+## 1b. Se o script "não der" — os 6 motivos habituais
+
+**Caminho mais fácil (Windows):** em vez de escreveres o comando, descarrega a pasta inteira
+`docs/help/pt-PT` do branch `arena/01a0aae0-omniroute` e **faz duplo clique em
+`correr-diagnostico.cmd`**. Esse lançador: muda para a pasta correta, desbloqueia o ficheiro
+(se vier da Internet fica bloqueado), descarrega-o sozinho se não estiver lá, corre com
+`-NoProfile` e `-ExecutionPolicy Bypass`, e **não fecha a janela no fim**.
+
+| O que vês | Porquê | Solução |
+|---|---|---|
+| `O termo '.\diagnostico-net-lenta.ps1' não é reconhecido...` / `não pode ser encontrado` | **Não estás na pasta do ficheiro** (estás em `C:\Users\<tu>`), ou o ficheiro não foi descarregado, ou o browser chamou-lhe `diagnostico-net-lenta.ps1.txt` | `cd` para a pasta onde o guardaste, confirma com `dir *.ps1` e volta a correr. Ou usa o `correr-diagnostico.cmd`. |
+| `A execução de scripts foi desativada neste sistema` | Política de execução (`Restricted`/`AllSigned`) | `powershell -ExecutionPolicy Bypass -File .\diagnostico-net-lenta.ps1` (é o que já está na linha de comando) ou, na sessão atual: `Set-ExecutionPolicy -Scope Process Bypass -Force` |
+| `Este ficheiro veio de outro computador e está bloqueado` / `não está assinado digitalmente` | *Mark of the Web* (descarregaste pela Internet) | `Unblock-File .\diagnostico-net-lenta.ps1` — ou duplo clique no `correr-diagnostico.cmd`, que o faz por ti |
+| `Não é possível carregar o ficheiro ... porque está numa unidade de rede/OneDrive` | PowerShell bloqueia scripts em algumas localizações sincronizadas | Copia a pasta para `C:\Temp` e corre a partir daí |
+| Erros de sintaxe ou acentos trocados (`Ã©`, `â€”`) | Ficheiro guardado noutra codificação | Usa a versão do repositório (**já está gravada com BOM UTF-8**, que o PowerShell 5.1 lê bem). Se editaste o ficheiro, guarda como *UTF-8 com BOM*. |
+| `powershell : O termo 'powershell' não é reconhecido` | A correr dentro do próprio PowerShell ou num CMD sem PATH | `Get-Command powershell` para confirmar; no PowerShell basta `.\diagnostico-net-lenta.ps1` (sem a palavra `powershell` à frente) |
+
+**Copiaste o comando com as crases (` ``` `) do chat?** Isso dá exatamente "não é reconhecido".
+Copia **só** a linha: `powershell -ExecutionPolicy Bypass -File .\diagnostico-net-lenta.ps1`
+
+**Descarregar e correr sem sair do PowerShell** (repositório é público, funciona na hora):
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$u = 'https://raw.githubusercontent.com/bonesolv1997-eng/OmniRoute/arena/01a0aae0-omniroute/docs/help/pt-PT/diagnostico-net-lenta.ps1'
+$f = "$env:TEMP\diagnostico-net-lenta.ps1"
+Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $f
+Unblock-File $f
+& $f
+```
+
+Se mesmo isto falhar, o problema é de rede e não do script — e o erro que aparece é
+exatamente o primeiro dado do diagnóstico. Copia-me o texto vermelho que aparecer.
+
+---
+
 ## 2. Como interpretar os resultados
 
 | Sintoma medido | Causa provável | O que fazer |
