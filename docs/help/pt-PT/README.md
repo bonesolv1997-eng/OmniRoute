@@ -107,6 +107,44 @@ Este passo de 30 segundos identifica a maioria dos casos sozinho.
 > prova de "não existe". Se o ficheiro ainda não estiver lá, usa primeiro o `baixar-kit.ps1`
 > (bloco mais abaixo) ou o menu do kit.
 
+### Download com garantia (contra cache e cópias antigas)
+
+O `raw.githubusercontent.com` é servido por um CDN que pode devolver uma **cópia
+antiga até ~5 minutos** depois de uma atualização. Foi o que aconteceu uma vez com o
+`medir-velocidade.ps1`: o ficheiro no repositório já estava corrigido e o comando ainda
+recebia a versão anterior (erros de sintaxe com `â”€`). Este bloco evita isso: descarrega com
+*cache-busting*, **confirma a versão** antes de correr e avisa em vez de executar lixo.
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$d = "$env:TEMP\omniroute-kit"; New-Item -ItemType Directory -Path $d -Force | Out-Null
+$f = "$d\medir-velocidade.ps1"
+Remove-Item $f -Force -ErrorAction SilentlyContinue
+$u = 'https://raw.githubusercontent.com/bonesolv1997-eng/OmniRoute/arena/01a0aae0-omniroute/docs/help/pt-PT/medir-velocidade.ps1?cb=' + [guid]::NewGuid().ToString('N')
+Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $f
+if ((Get-Content $f -Raw) -match 'KIT-VERSION: 2026\.09\.16\.4') {
+    Unblock-File $f; & $f
+} else {
+    Write-Host "Recebi uma copia ANTIGA (cache do CDN). Espera 5 minutos e repete o comando." -ForegroundColor Yellow
+}
+```
+
+Para trocar de ferramenta, muda só o nome em `$f` **e** no URL: `medir-velocidade.ps1`,
+`teste-ab-wifi.ps1`, `desligar-poupanca-wifi.ps1`, `diagnostico-net-lenta.ps1`.
+
+### Porque é que os `.ps1` deste kit são ASCII puro
+
+Ficheiros `.ps1` com acentos ou caracteres decorativos (`─`, `—`, `·`) **dependem do BOM
+UTF-8** para serem lidos bem pelo Windows PowerShell 5.1. Sem BOM — ou com uma cópia antiga
+vinda de cache — esses caracteres são lidos como Windows-1252, transformam-se em **aspas
+tipográficas** (`”`, `“`) e o PowerShell usa-as como delimitadores de string: o ficheiro
+inteiro deixa de fazer parse (`Unexpected token`, `Missing closing ')'`).
+
+Solução adotada: **todos os `.ps1` do kit são ASCII puro** (7 bits) e levam um marcador
+`# KIT-VERSION:`. Assim fazem parse *sempre* — com BOM, sem BOM, lido como UTF-8 ou como
+CP1252. Custo: os textos de saída não têm acentos (`Nao consegui medir`). O `verificar-kit.sh`
+impõe esta regra e falha se algum `.ps1` voltar a ter bytes não-ASCII.
+
 **Aplicar o Wi-Fi (eleva-se sozinho).** Cola isto: descarrega o script, desbloqueia e abre a
 janela de administrador já a correr com `-Aplicar` (aceita o UAC → **Sim**). A janela fica
 aberta no fim para poderes ler o resultado:
@@ -139,7 +177,7 @@ opções. Esse lançador: muda para a pasta correta, desbloqueia o ficheiro
 | `A execução de scripts foi desativada neste sistema` | Política de execução (`Restricted`/`AllSigned`) | `powershell -ExecutionPolicy Bypass -File .\diagnostico-net-lenta.ps1` (é o que já está na linha de comando) ou, na sessão atual: `Set-ExecutionPolicy -Scope Process Bypass -Force` |
 | `Este ficheiro veio de outro computador e está bloqueado` / `não está assinado digitalmente` | *Mark of the Web* (descarregaste pela Internet) | `Unblock-File .\diagnostico-net-lenta.ps1` — ou duplo clique no `correr-diagnostico.cmd`, que o faz por ti |
 | `Não é possível carregar o ficheiro ... porque está numa unidade de rede/OneDrive` | PowerShell bloqueia scripts em algumas localizações sincronizadas | Copia a pasta para `C:\Temp` e corre a partir daí |
-| Erros de sintaxe com `â€”`, `â”€`, `Â·` no meio do código<br>(ex.: `Unexpected token '€" * 72))'`) | O ficheiro foi lido como **Windows-1252** porque **não tem BOM UTF-8**. Os caracteres decorativos (`─`, `—`, `·`) viram aspas tipográficas, e o PowerShell usa-as como delimitadores de string — parte o ficheiro todo | Volta a descarregar (todas as versões do repositório têm **BOM UTF-8** e já não usam esses caracteres decorativos). Se editaste o ficheiro, guarda como *UTF-8 com BOM*. Verifica com `bash verificar-kit.sh` |
+| Erros de sintaxe com `â€”`, `â”€`, `Â·`, `Unexpected token '€" * 72))'` | **Cópia antiga**: o ficheiro que correu ainda era a versão anterior (o CDN do GitHub pode servir cache até ~5 min), e essa versão tinha caracteres decorativos sem BOM → lidos como aspas tipográficas | Usa o bloco **"Download com garantia"** (secção 1b): faz cache-busting e confirma o `KIT-VERSION` antes de correr. As versões atuais são **ASCII puro** e já não podem dar este erro |
 | `powershell : O termo 'powershell' não é reconhecido` | A correr dentro do próprio PowerShell ou num CMD sem PATH | `Get-Command powershell` para confirmar; no PowerShell basta `.\diagnostico-net-lenta.ps1` (sem a palavra `powershell` à frente) |
 | `The argument '.\desligar-poupanca-wifi.ps1' ... does not exist`<br>(idem para `medir-velocidade.ps1`, `diagnostico-net-lenta.ps1`) | O ficheiro **não está na pasta atual** — ou ainda não foi descarregado, ou está em `%TEMP%`/`Downloads` e o comando procura em `.\` | Usa o **menu do kit** (`kit.cmd`, ou as 4 linhas do ponto 3) ou os caminhos **absolutos** da tabela da Regra de ouro, acima |
 
@@ -795,7 +833,7 @@ Terceiro relatório (erro de sintaxe ao correr `medir-velocidade.ps1`):
 
 | Observação | Leitura | Ação |
 |---|---|---|
-| `Unexpected token '€" * 72))'`, `Missing closing ')'`, `â”€`, `Â·` | O ficheiro foi lido como **Windows-1252**: faltava o **BOM UTF-8** (a reescrita do script perdeu-o) e os caracteres decorativos viraram aspas tipográficas | Corrigido: BOM garantido em todos os `.ps1` + separadores convertidos para ASCII + verificador `verificar-kit.sh` (com teste negativo que reproduz o bug) |
+| `Unexpected token '€" * 72))'`, `Missing closing ')'`, `â”€`, `Â·` | Duas causas somadas: (1) a reescrita do script perdeu o **BOM UTF-8** e (2) ao re-descarregar, o **CDN do GitHub ainda servia a cópia antiga** (cache de até ~5 min) | Corrigido de raiz: **`.ps1` em ASCII puro** (faz parse com/sem BOM, em UTF-8 ou CP1252) + **cache-busting** nos downloads + **verificação do `KIT-VERSION`** antes de correr + `verificar-kit.sh` que falha se a regra for quebrada |
 
 Sequência de resolução (o que fazer por esta ordem): **limite do Steam → desligar a Wi-Fi e
 medir por cabo → Green Ethernet/Gigabit Lite off + driver Wi-Fi atualizado → trocar cabo/porta

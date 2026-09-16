@@ -1,14 +1,15 @@
-﻿<#
+<#
     baixar-kit.ps1 - descarrega TODOS os scripts deste kit para uma pasta e deixa tudo pronto.
 
-    Uso (não precisa de administrador):
+    Uso (nao precisa de administrador):
         powershell -ExecutionPolicy Bypass -File .\baixar-kit.ps1
         powershell -ExecutionPolicy Bypass -File .\baixar-kit.ps1 -Destino 'C:\Temp\kit'
 
-    Por omissão, a pasta é:  Downloads\omniroute-net-kit
+    Por omissao, a pasta e:  Downloads\omniroute-net-kit
     No fim, o script imprime os comandos exatos para cada ferramenta - a partir da pasta
     onde os ficheiros ficam, os comandos funcionam sempre.
 #>
+# KIT-VERSION: 2026.09.16.4 (ASCII)
 
 [CmdletBinding()]
 param([string]$Destino)
@@ -58,8 +59,19 @@ foreach ($f in $ficheiros) {
     $alvo = Join-Path $Destino $f
     Write-Host ("  - " + $f.PadRight(32)) -NoNewline
     try {
-        Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $alvo -TimeoutSec 30 -ErrorAction Stop
+        # cache-busting: sem isto, o CDN do raw.githubusercontent.com pode servir
+        # uma copia antiga ate 5 minutos depois de uma atualizacao.
+        $urlCb = $url + '?cb=' + [guid]::NewGuid().ToString('N')
+        Invoke-WebRequest -UseBasicParsing -Uri $urlCb -OutFile $alvo -TimeoutSec 30 -ErrorAction Stop
         Unblock-File -LiteralPath $alvo -ErrorAction SilentlyContinue
+        if ($f -like '*.ps1') {
+            $conteudo = Get-Content -LiteralPath $alvo -Raw
+            if ($conteudo -notmatch 'KIT-VERSION:') {
+                Write-Host "COPIA ANTIGA (cache?)" -ForegroundColor Yellow
+                $falhou += $f
+                continue
+            }
+        }
         Write-Host "OK" -ForegroundColor Green
         $ok++
     } catch {

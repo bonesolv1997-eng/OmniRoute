@@ -1,12 +1,12 @@
-﻿<#
+<#
     teste-ab-wifi.ps1 - compara a velocidade COM Wi-Fi e SEM Wi-Fi (por cabo),
-                         na mesma sessão, sem tu teres de mexer em nada.
+                         na mesma sessao, sem tu teres de mexer em nada.
 
     Uso:
         powershell -ExecutionPolicy Bypass -File .\teste-ab-wifi.ps1
         powershell -ExecutionPolicy Bypass -File .\teste-ab-wifi.ps1 -MB 150
 
-    Requisitos: precisa de TER O CABO LIGADO (ou o script recusa e não desliga nada).
+    Requisitos: precisa de TER O CABO LIGADO (ou o script recusa e nao desliga nada).
     No fim, volta a ligar a Wi-Fi automaticamente (mesmo se algo falhar a meio).
 
     O que faz:
@@ -17,6 +17,7 @@
 
     Precisa de administrador (para desligar/ligar o adaptador). O script eleva-se sozinho.
 #>
+# KIT-VERSION: 2026.09.16.4 (ASCII)
 
 [CmdletBinding()]
 param([int]$MB = 100)
@@ -29,7 +30,7 @@ $ehAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 function Linha { Write-Host ("  " + ("-" * 72)) -ForegroundColor DarkGray }
 function Titulo($t) { Write-Host ""; Write-Host ("  " + $t) -ForegroundColor Cyan; Linha }
 function Ok($t) { Write-Host ("  [OK]      " + $t) -ForegroundColor Green }
-function Warn($t) { Write-Host ("  [ATENÇÃO] " + $t) -ForegroundColor Yellow }
+function Warn($t) { Write-Host ("  [ATENCAO] " + $t) -ForegroundColor Yellow }
 function Info($t) { Write-Host ("  [i]       " + $t) -ForegroundColor DarkCyan }
 function Erro($t) { Write-Host ("  [FALHA]   " + $t) -ForegroundColor Red }
 
@@ -63,9 +64,9 @@ function Mostrar-Interfaces {
     return $ifs[0]
 }
 
-# -- Motor de medição com VALIDAÇÃO -----------------------------------------
-#  Uma medição só conta se: HTTP 200 E pelo menos 20 MB transferidos.
-#  Ficheiros pequenos (o SteamSetup.exe tem ~2,3 MB) davam números falsos.
+# -- Motor de medicao com VALIDACAO -----------------------------------------
+#  Uma medicao so conta se: HTTP 200 E pelo menos 20 MB transferidos.
+#  Ficheiros pequenos (o SteamSetup.exe tem ~2,3 MB) davam numeros falsos.
 $MIN_BYTES_VALIDO = 20MB
 $MAX_SEGUNDOS = 15
 $Fontes = @(
@@ -157,23 +158,23 @@ $wifi = @($adapta | Where-Object { $_.Status -eq 'Up' -and ($_.PhysicalMediaType
 $caboUp = @($adapta | Where-Object { $_.Status -eq 'Up' -and $_.PhysicalMediaType -match '802\.3' -and $_.InterfaceDescription -notmatch 'Wi-Fi|Wireless|WLAN' })
 
 if ($wifi.Count -eq 0) {
-    Warn "Não vejo nenhum adaptador Wi-Fi ligado. Só posso medir o cabo."
+    Warn "Nao vejo nenhum adaptador Wi-Fi ligado. So posso medir o cabo."
 }
 if ($caboUp.Count -eq 0) {
-    Erro "NÃO tens cabo ligado (nenhuma interface Ethernet ativa)."
+    Erro "NAO tens cabo ligado (nenhuma interface Ethernet ativa)."
     Write-Host "        Este teste desliga a Wi-Fi - sem cabo ficarias sem rede. Nada foi alterado." -ForegroundColor Yellow
     Write-Host "        Liga o cabo ao PC e ao router, confirma que fica 'Up', e volta a correr este script." -ForegroundColor Yellow
-    Write-Host "        Se o cabo estiver ligado e continuar 'Down', o problema pode ser o próprio cabo/porta." -ForegroundColor Yellow
+    Write-Host "        Se o cabo estiver ligado e continuar 'Down', o problema pode ser o proprio cabo/porta." -ForegroundColor Yellow
     return
 }
 Info ("Cabo ativo: " + ($caboUp.Name -join ', ') + "   |   Wi-Fi ativa: " + ($wifi.Name -join ', '))
 
 # -- 2) Com Wi-Fi -----------------------------------------------------------
-Titulo "2. Medição COM Wi-Fi ligada"
+Titulo "2. Medicao COM Wi-Fi ligada"
 $comWifi = Medir-Velocidade "Resultados (Wi-Fi ligada):"
 
 # -- 3) Sem Wi-Fi (cabo) ----------------------------------------------------
-Titulo "3. Medição SEM Wi-Fi (só cabo)"
+Titulo "3. Medicao SEM Wi-Fi (so cabo)"
 $resultadoCabo = $null
 $wifiDesligada = $false
 try {
@@ -183,21 +184,21 @@ try {
             Ok ("Wi-Fi desligada: " + $w.Name)
             $wifiDesligada = $true
         } catch {
-            Warn ("Não consegui desligar " + $w.Name + ": " + $_.Exception.Message)
+            Warn ("Nao consegui desligar " + $w.Name + ": " + $_.Exception.Message)
         }
     }
     if ($wifiDesligada) {
         Info "A aguardar que a rota passe para o cabo..."
         Start-Sleep -Seconds 5
         $null = Mostrar-Interfaces
-        $resultadoCabo = Medir-Velocidade "Resultados (só cabo):"
+        $resultadoCabo = Medir-Velocidade "Resultados (so cabo):"
     }
 } finally {
-    # Rede de segurança: voltar a ligar a Wi-Fi SEMPRE, mesmo com erro a meio
+    # Rede de seguranca: voltar a ligar a Wi-Fi SEMPRE, mesmo com erro a meio
     if ($wifiDesligada) {
         Titulo "4. A voltar a ligar a Wi-Fi"
         foreach ($w in $wifi) {
-            try { Enable-NetAdapter -Name $w.Name -Confirm:$false -ErrorAction Stop } catch { Warn ("Não consegui religar " + $w.Name) }
+            try { Enable-NetAdapter -Name $w.Name -Confirm:$false -ErrorAction Stop } catch { Warn ("Nao consegui religar " + $w.Name) }
         }
         $esperou = 0
         while ($esperou -lt 30) {
@@ -207,7 +208,7 @@ try {
         }
         foreach ($w in $wifi) {
             $ad = Get-NetAdapter -Name $w.Name -ErrorAction SilentlyContinue
-            if ($ad -and $ad.Status -eq 'Up') { Ok ($w.Name + " ligada outra vez.") } else { Warn ($w.Name + " ainda não voltou - liga-a em Definições > Rede (ou na tecla do teclado).") }
+            if ($ad -and $ad.Status -eq 'Up') { Ok ($w.Name + " ligada outra vez.") } else { Warn ($w.Name + " ainda nao voltou - liga-a em Definicoes > Rede (ou na tecla do teclado).") }
         }
     }
 }
@@ -215,26 +216,26 @@ try {
 # -- Resumo -----------------------------------------------------------------
 Titulo "RESUMO DO TESTE A/B"
 if ($comWifi) { Write-Host ("  Com Wi-Fi :  " + ([math]::Round($comWifi.Mbps,1)).ToString().PadLeft(7) + " Mbps   (" + $comWifi.Nome + ")") -ForegroundColor Gray }
-if ($resultadoCabo) { Write-Host ("  Só cabo   :  " + ([math]::Round($resultadoCabo.Mbps,1)).ToString().PadLeft(7) + " Mbps   (" + $resultadoCabo.Nome + ")") -ForegroundColor Gray }
+if ($resultadoCabo) { Write-Host ("  So cabo   :  " + ([math]::Round($resultadoCabo.Mbps,1)).ToString().PadLeft(7) + " Mbps   (" + $resultadoCabo.Nome + ")") -ForegroundColor Gray }
 
 if ($comWifi -and $resultadoCabo -and $comWifi.Mbps -gt 0 -and $resultadoCabo.Mbps -gt 0) {
     $delta = $resultadoCabo.Mbps - $comWifi.Mbps
     $razao = [math]::Round($comWifi.Mbps / $resultadoCabo.Mbps, 2)
     Write-Host ""
-    Write-Host ("  Diferença: " + $(if ($delta -ge 0) { "+" } else { "" }) + [math]::Round($delta,1) + " Mbps no cabo (Wi-Fi = " + [math]::Round($razao*100,0) + "% do cabo)") -ForegroundColor White
+    Write-Host ("  Diferenca: " + $(if ($delta -ge 0) { "+" } else { "" }) + [math]::Round($delta,1) + " Mbps no cabo (Wi-Fi = " + [math]::Round($razao*100,0) + "% do cabo)") -ForegroundColor White
     if ($resultadoCabo.Mbps -lt 300) {
-        Erro "O CABO também está lento (<300 Mbps numa linha de 1 Gbps). Não é problema de Wi-Fi: verifica cabo/porta do router, Green Ethernet/Gigabit Lite na NIC Ethernet, e o router (QoS)."
+        Erro "O CABO tambem esta lento (<300 Mbps numa linha de 1 Gbps). Nao e problema de Wi-Fi: verifica cabo/porta do router, Green Ethernet/Gigabit Lite na NIC Ethernet, e o router (QoS)."
     } elseif ($razao -lt 0.5) {
-        Warn "A Wi-Fi entrega menos de metade do cabo - o Wi-Fi (AX200) está a limitar. Vê a secção 4e do guia: driver 24.20.2.1, canal/160MHz, antenas, autotuning TCP."
+        Warn "A Wi-Fi entrega menos de metade do cabo - o Wi-Fi (AX200) esta a limitar. Ve a seccao 4e do guia: driver 24.20.2.1, canal/160MHz, antenas, autotuning TCP."
     } elseif ($razao -gt 0.8) {
-        Ok "A Wi-Fi está próxima do cabo - o Wi-Fi não é o problema. Se o Steam continua lento, é limite do Steam/QoS/disco (secções 3, 4b e 7)."
+        Ok "A Wi-Fi esta proxima do cabo - o Wi-Fi nao e o problema. Se o Steam continua lento, e limite do Steam/QoS/disco (seccoes 3, 4b e 7)."
     } else {
-        Info "A Wi-Fi entrega entre 50% e 80% do cabo - dentro do normal. Não é aqui que está o teu gargalo."
+        Info "A Wi-Fi entrega entre 50% e 80% do cabo - dentro do normal. Nao e aqui que esta o teu gargalo."
     }
     Write-Host ""
     Info "Guarda este resultado: repete depois de atualizar o driver do AX200 para 24.20.2.1 e compara."
 } else {
-    Warn "Não consegui medir os dois cenários (falta cabo, rede bloqueada, ou o adaptador não voltou)."
-    Info "O que interessa: o valor do CABO. Se ele estiver em ~940 Mbps, a linha e o PC estão bem e o problema é do Steam/Wi-Fi."
+    Warn "Nao consegui medir os dois cenarios (falta cabo, rede bloqueada, ou o adaptador nao voltou)."
+    Info "O que interessa: o valor do CABO. Se ele estiver em ~940 Mbps, a linha e o PC estao bem e o problema e do Steam/Wi-Fi."
 }
 Write-Host ""

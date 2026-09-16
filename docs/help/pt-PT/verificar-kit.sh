@@ -4,13 +4,14 @@
 #
 #   Uso:  bash verificar-kit.sh          (corre a partir da pasta do kit)
 #
-# Porquê: um .ps1 sem BOM UTF-8 é lido pelo Windows PowerShell 5.1 como
-# Windows-1252; nesse caso um caracter decorativo (─, —, ·) transforma-se em
-# aspas tipograficas (” “) e o PowerShell interpreta-as como delimitadores de
-# string — o ficheiro inteiro deixa de fazer parse. Aconteceu uma vez.
+# Porquê: um .ps1 com acentos ou caracteres decorativos depende do BOM UTF-8 para
+# ser lido correctamente pelo Windows PowerShell 5.1. Sem BOM (ou com uma copia
+# antiga vinda de cache), esses caracteres viram aspas tipograficas e o ficheiro
+# deixa de fazer parse. Solucao adoptada: .ps1 em ASCII puro.
 #
 # Verifica:
-#   1. todos os .ps1 têm BOM UTF-8;
+#   1. todos os .ps1 são ASCII PURO (fazem parse com/sem BOM, em UTF-8 ou CP1252)
+#      e levam um marcador KIT-VERSION;
 #   2. nenhum .ps1 contém caracteres decorativos de risco em CP1252;
 #   3. os .cmd são ASCII puro (ignorando CR/LF/TAB) com linhas CRLF;
 #   4. os .sh passam o `bash -n`;
@@ -78,12 +79,14 @@ def balanco(src):
 def verifica_ps(f):
     raw = io.open(f, 'rb').read()
     probs = []
-    if not raw.startswith(b'\xef\xbb\xbf'):
-        probs.append('sem BOM UTF-8')
-    txt = raw.decode('utf-8-sig')
-    perigosos = sorted({c for c in txt if ord(c) in PERIGOSOS})
-    if perigosos:
-        probs.append('decorativos de risco: ' + ' '.join('%04X' % ord(c) for c in perigosos))
+    # Regra de ouro deste kit: os .ps1 sao ASCII PURO. Assim fazem parse com BOM,
+    # sem BOM, em UTF-8 ou em CP1252 - nenhuma cache/CDN/copiar-colar os parte.
+    nao_ascii = sorted({b for b in raw if b > 127})
+    if nao_ascii:
+        probs.append('tem bytes nao-ASCII (%s)' % ' '.join('%02X' % b for b in nao_ascii[:8]))
+    txt = raw.decode('utf-8-sig', errors='replace')
+    if 'KIT-VERSION:' not in txt:
+        probs.append('sem marcador KIT-VERSION')
     probs += balanco(txt)
     return probs
 

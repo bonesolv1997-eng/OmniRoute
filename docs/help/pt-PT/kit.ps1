@@ -1,8 +1,8 @@
-﻿<#
-    kit.ps1 - ponto de entrada ÚNICO do kit de diagnóstico de rede (PT-PT).
+<#
+    kit.ps1 - ponto de entrada UNICO do kit de diagnostico de rede (PT-PT).
 
     A ideia: nunca mais escreves o nome de um ficheiro. Este script descarrega os
-    outros três sozinho e corre-os por caminho absoluto, por isso o erro
+    outros tres sozinho e corre-os por caminho absoluto, por isso o erro
     "The argument '.\\nome.ps1' to the -File parameter does not exist" deixa de
     poder acontecer.
 
@@ -13,14 +13,15 @@
     Uso - guardado em disco (menu igual):
         powershell -ExecutionPolicy Bypass -File .\kit.ps1
 
-    Uso - direto, sem menu (útil para automatizar):
+    Uso - direto, sem menu (util para automatizar):
         -Tarefa diagnostico | velocidade | wifi | wifi-aplicar | wifi-reverter | baixar | ler
 
     Notas:
-      - a opção 4 (aplicar) precisa de administrador - o script abre ele próprio a
-        janela elevada, não tens de fazer nada;
-      - não altera nada do sistema nas opções 1, 2, 3, 6 e 7.
+      - a opcao 4 (aplicar) precisa de administrador - o script abre ele proprio a
+        janela elevada, nao tens de fazer nada;
+      - nao altera nada do sistema nas opcoes 1, 2, 3, 6 e 7.
 #>
+# KIT-VERSION: 2026.09.16.4 (ASCII)
 
 [CmdletBinding()]
 param(
@@ -53,7 +54,9 @@ function Obter-Ficheiro([string]$nome) {
     if (Test-Path $alvo) { return $alvo }
     Write-Host ("  [i] A descarregar " + $nome + "...") -ForegroundColor DarkCyan
     try {
-        Invoke-WebRequest -UseBasicParsing -Uri ($BASE + '/' + $nome) -OutFile $alvo -TimeoutSec 30 -ErrorAction Stop
+        # cache-busting: evita que o CDN sirva uma copia antiga (ate 5 min de atraso)
+        $urlCb = $BASE + '/' + $nome + '?cb=' + [guid]::NewGuid().ToString('N')
+        Invoke-WebRequest -UseBasicParsing -Uri $urlCb -OutFile $alvo -TimeoutSec 30 -ErrorAction Stop
         Unblock-File -LiteralPath $alvo -ErrorAction SilentlyContinue
         return $alvo
     } catch {
@@ -69,8 +72,12 @@ function Baixar-Tudo {
         $destino = Join-Path $raiz $f
         Write-Host ("  - " + $f.PadRight(30)) -NoNewline
         try {
-            Invoke-WebRequest -UseBasicParsing -Uri ($BASE + '/' + $f) -OutFile $destino -TimeoutSec 30 -ErrorAction Stop
+            Invoke-WebRequest -UseBasicParsing -Uri ($BASE + '/' + $f + '?cb=' + [guid]::NewGuid().ToString('N')) -OutFile $destino -TimeoutSec 30 -ErrorAction Stop
             Unblock-File -LiteralPath $destino -ErrorAction SilentlyContinue
+            if ($f -like '*.ps1') {
+                $c = Get-Content -LiteralPath $destino -Raw
+                if ($c -notmatch 'KIT-VERSION:') { Write-Host "COPIA ANTIGA (cache?)" -ForegroundColor Yellow; $falhas += $f; continue }
+            }
             Write-Host "OK" -ForegroundColor Green
             $ok++
         } catch {

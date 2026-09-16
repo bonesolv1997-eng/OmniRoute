@@ -1,19 +1,20 @@
-﻿<#
-    medir-velocidade.ps1 - teste de velocidade (30 s) com validação de medições.
+<#
+    medir-velocidade.ps1 - teste de velocidade (30 s) com validacao de medicoes.
 
-    Correção importante (v2): só aceita uma medição se tiver transferido pelo menos
-    20 MB. Ficheiros pequenos (como o SteamSetup.exe, ~2,3 MB) davam números falsos.
+    Correcao importante (v2): so aceita uma medicao se tiver transferido pelo menos
+    20 MB. Ficheiros pequenos (como o SteamSetup.exe, ~2,3 MB) davam numeros falsos.
 
     Uso:
         powershell -ExecutionPolicy Bypass -File .\medir-velocidade.ps1
         powershell -ExecutionPolicy Bypass -File .\medir-velocidade.ps1 -MB 200
 
-    Como lê o resultado:
-        VÁLIDO    = transferiu >=20 MB e HTTP 200 -> o número é a velocidade real
-        INVÁLIDO  = HTTP != 200, transferência curta, ou ligação falhada
-        O resumo só usa medições VÁLIDAS. Se nenhuma for válida, diz INCONCLUSIVO
-        (não inventa um veredito).
+    Como le o resultado:
+        VALIDO    = transferiu >=20 MB e HTTP 200 -> o numero e a velocidade real
+        INVALIDO  = HTTP != 200, transferencia curta, ou ligacao falhada
+        O resumo so usa medicoes VALIDAS. Se nenhuma for valida, diz INCONCLUSIVO
+        (nao inventa um veredito).
 #>
+# KIT-VERSION: 2026.09.16.4 (ASCII)
 
 [CmdletBinding()]
 param([int]$MB = 100)
@@ -23,7 +24,7 @@ $ProgressPreference = 'SilentlyContinue'
 
 function Linha { Write-Host ("  " + ("-" * 72)) -ForegroundColor DarkGray }
 function Ok($t) { Write-Host ("  [OK]      " + $t) -ForegroundColor Green }
-function Warn($t) { Write-Host ("  [ATENÇÃO] " + $t) -ForegroundColor Yellow }
+function Warn($t) { Write-Host ("  [ATENCAO] " + $t) -ForegroundColor Yellow }
 function Info($t) { Write-Host ("  [i]       " + $t) -ForegroundColor DarkCyan }
 function Erro($t) { Write-Host ("  [FALHA]   " + $t) -ForegroundColor Red }
 
@@ -32,7 +33,7 @@ $MAX_SEGUNDOS = 15
 
 # Fontes: todas com ficheiros de ~100 MB ou download de tamanho controlado.
 # (O Hetzner foi removido - falha em muitas redes. O Steam CDN deixou de ser usado
-#  para velocidade: o SteamSetup.exe tem ~2 MB e não mede nada.)
+#  para velocidade: o SteamSetup.exe tem ~2 MB e nao mede nada.)
 $Fontes = @(
     @{ Nome = 'Cloudflare'; Url = 'https://speed.cloudflare.com/__down?bytes=' + ($MB * 1000000) },
     @{ Nome = 'OVH (Franca)'; Url = 'https://proof.ovh.net/files/100Mb.dat' },
@@ -47,7 +48,7 @@ Write-Host ""
 Write-Host "  TESTE DE VELOCIDADE - $(Get-Date -Format 'HH:mm:ss')" -ForegroundColor White
 Linha
 
-# -- Por onde sai o tráfego -------------------------------------------------
+# -- Por onde sai o trafego -------------------------------------------------
 try {
     $ifs = @(Get-NetIPInterface -AddressFamily IPv4 -ErrorAction SilentlyContinue |
         Where-Object { $_.ConnectionState -eq 'Connected' } | Sort-Object InterfaceMetric)
@@ -65,7 +66,7 @@ try {
     }
 } catch { Write-Host "  (nao consegui ler as interfaces)" -ForegroundColor DarkGray }
 
-# -- Latência base ----------------------------------------------------------
+# -- Latencia base ----------------------------------------------------------
 $base = $null
 try {
     $p = Test-Connection -ComputerName '8.8.8.8' -Count 6 -ErrorAction SilentlyContinue
@@ -76,7 +77,7 @@ try {
     }
 } catch { }
 
-# -- Medições ---------------------------------------------------------------
+# -- Medicoes ---------------------------------------------------------------
 Linha
 if (-not $curl) {
     Warn "curl.exe nao encontrado - a tentar com .NET (menos preciso)."
@@ -85,7 +86,7 @@ if (-not $curl) {
 $resultados = @()
 foreach ($f in $Fontes) {
     if (-not $curl) {
-        # Fallback .NET: lê durante 12 s e mede o que passou
+        # Fallback .NET: le durante 12 s e mede o que passou
         $bytes = 0; $seg = 0.0; $http = 0
         try {
             $req = [System.Net.HttpWebRequest]::Create($f.Url); $req.Timeout = 15000; $req.ReadWriteTimeout = 15000
@@ -140,7 +141,7 @@ foreach ($r in $resultados) {
     }
 }
 
-# -- Latência sob carga -----------------------------------------------------
+# -- Latencia sob carga -----------------------------------------------------
 $validos = @($resultados | Where-Object { $_.Valido })
 $melhor = $validos | Sort-Object Mbps -Descending | Select-Object -First 1
 
@@ -172,7 +173,7 @@ if ($melhor) {
     } elseif ($melhor.Mbps -lt 300) {
         Warn ("Entre 100 e 300 Mbps (" + [math]::Round($melhor.Mbps,1) + " Mbps). Abaixo do plano - cheira a link a 100 Mbps, QoS, ou Wi-Fi.")
     } elseif ($melhor.Mbps -lt 700) {
-        Info ("Entre 300 e 700 Mbps (" + [math]::Round($melhor.Mbps,1) + " Mbps). Bom, mas ainda há margem numa linha de 1 Gbps.")
+        Info ("Entre 300 e 700 Mbps (" + [math]::Round($melhor.Mbps,1) + " Mbps). Bom, mas ainda ha margem numa linha de 1 Gbps.")
     } else {
         Ok ("Linha saudavel: " + [math]::Round($melhor.Mbps,1) + " Mbps. O gargalo do Steam nao esta na rede.")
     }
@@ -185,7 +186,7 @@ if ($melhor) {
     Write-Host ""
     Write-Host "       Confirma a mao (mostra o erro exato):" -ForegroundColor White
     Write-Host "         curl.exe -v -o NUL --max-time 15 `"https://speed.cloudflare.com/__down?bytes=20000000`"" -ForegroundColor Gray
-    Write-Host "       Se aparecer 'SSL certificate problem' / 'schannel', há inspeção HTTPS ativa" -ForegroundColor Gray
-    Write-Host "       (antivírus com inspeção TLS, ou o Traffic Inspector do OmniRoute). Ver secção 8 do guia." -ForegroundColor Gray
+    Write-Host "       Se aparecer 'SSL certificate problem' / 'schannel', ha inspecao HTTPS ativa" -ForegroundColor Gray
+    Write-Host "       (antivirus com inspecao TLS, ou o Traffic Inspector do OmniRoute). Ver seccao 8 do guia." -ForegroundColor Gray
 }
 Write-Host ""

@@ -23,7 +23,7 @@ echo  [i] A obter a versao mais recente dos scripts...
 set "FALHOU=0"
 for %%F in (diagnostico-net-lenta.ps1 medir-velocidade.ps1 desligar-poupanca-wifi.ps1) do (
   echo   - %%F
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $d = $env:TEMP + '\' + '%%F'; Invoke-WebRequest -UseBasicParsing -Uri '%BASE%/%%F' -OutFile $d -TimeoutSec 25; Unblock-File -LiteralPath $d -ErrorAction SilentlyContinue; exit 0 } catch { exit 1 }"
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $d = $env:TEMP + '\' + '%%F'; Invoke-WebRequest -UseBasicParsing -Uri '%BASE%/%%F?cb=%RANDOM%%RANDOM%' -OutFile $d -TimeoutSec 25; Unblock-File -LiteralPath $d -ErrorAction SilentlyContinue; exit 0 } catch { exit 1 }"
   if errorlevel 1 set "FALHOU=1"
 )
 
