@@ -1,5 +1,5 @@
 ﻿<#
-    teste-ab-wifi.ps1 — compara a velocidade COM Wi-Fi e SEM Wi-Fi (por cabo),
+    teste-ab-wifi.ps1 - compara a velocidade COM Wi-Fi e SEM Wi-Fi (por cabo),
                          na mesma sessão, sem tu teres de mexer em nada.
 
     Uso:
@@ -26,7 +26,7 @@ $ProgressPreference = 'SilentlyContinue'
 
 $ehAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
-function Linha { Write-Host ("  " + ("─" * 72)) -ForegroundColor DarkGray }
+function Linha { Write-Host ("  " + ("-" * 72)) -ForegroundColor DarkGray }
 function Titulo($t) { Write-Host ""; Write-Host ("  " + $t) -ForegroundColor Cyan; Linha }
 function Ok($t) { Write-Host ("  [OK]      " + $t) -ForegroundColor Green }
 function Warn($t) { Write-Host ("  [ATENÇÃO] " + $t) -ForegroundColor Yellow }
@@ -50,7 +50,7 @@ Write-Host ""
 Write-Host "  TESTE A/B: WI-FI vs CABO" -ForegroundColor White
 Write-Host ("  " + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')) -ForegroundColor DarkGray
 
-# ── Estado das interfaces ───────────────────────────────────────────────────
+# -- Estado das interfaces ---------------------------------------------------
 function Mostrar-Interfaces {
     $ifs = @(Get-NetIPInterface -AddressFamily IPv4 -ErrorAction SilentlyContinue |
         Where-Object { $_.ConnectionState -eq 'Connected' } | Sort-Object InterfaceMetric)
@@ -58,12 +58,12 @@ function Mostrar-Interfaces {
     foreach ($i in $ifs) {
         $ad = Get-NetAdapter -InterfaceIndex $i.ifIndex -ErrorAction SilentlyContinue
         $marca = if ($ifs[0].ifIndex -eq $i.ifIndex) { "   <-- rota preferida" } else { "" }
-        Write-Host ("  · " + $i.InterfaceAlias.PadRight(14) + " metric=" + ([string]$i.InterfaceMetric).PadRight(6) + " link=" + ([string]$ad.LinkSpeed).PadRight(10) + " [" + $ad.InterfaceDescription + "]" + $marca) -ForegroundColor $(if ($marca) { 'Yellow' } else { 'Gray' })
+        Write-Host ("  - " + $i.InterfaceAlias.PadRight(14) + " metric=" + ([string]$i.InterfaceMetric).PadRight(6) + " link=" + ([string]$ad.LinkSpeed).PadRight(10) + " [" + $ad.InterfaceDescription + "]" + $marca) -ForegroundColor $(if ($marca) { 'Yellow' } else { 'Gray' })
     }
     return $ifs[0]
 }
 
-# ── Motor de medição com VALIDAÇÃO ─────────────────────────────────────────
+# -- Motor de medição com VALIDAÇÃO -----------------------------------------
 #  Uma medição só conta se: HTTP 200 E pelo menos 20 MB transferidos.
 #  Ficheiros pequenos (o SteamSetup.exe tem ~2,3 MB) davam números falsos.
 $MIN_BYTES_VALIDO = 20MB
@@ -134,9 +134,9 @@ function Mostrar-Resultados($lista) {
     foreach ($r in $lista) {
         if ($r.Valido) {
             $cor = 'Green'; if ($r.Mbps -lt 300) { $cor = 'Yellow' }; if ($r.Mbps -lt 100) { $cor = 'Red' }
-            Write-Host ("    · " + $r.Nome.PadRight(16) + " " + ([math]::Round($r.Mbps,1)).ToString().PadLeft(7) + " Mbps   (" + $r.MB + " MB em " + [math]::Round($r.Seg,1) + " s)") -ForegroundColor $cor
+            Write-Host ("    - " + $r.Nome.PadRight(16) + " " + ([math]::Round($r.Mbps,1)).ToString().PadLeft(7) + " Mbps   (" + $r.MB + " MB em " + [math]::Round($r.Seg,1) + " s)") -ForegroundColor $cor
         } else {
-            Write-Host ("    · " + $r.Nome.PadRight(16) + " INVALIDO: " + $r.Motivo) -ForegroundColor DarkYellow
+            Write-Host ("    - " + $r.Nome.PadRight(16) + " INVALIDO: " + $r.Motivo) -ForegroundColor DarkYellow
         }
     }
     $validos = @($lista | Where-Object { $_.Valido })
@@ -148,7 +148,7 @@ function Mostrar-Resultados($lista) {
     return ($validos | Sort-Object Mbps -Descending | Select-Object -First 1)
 }
 
-# ── Que adaptadores temos? ─────────────────────────────────────────────────
+# -- Que adaptadores temos? -------------------------------------------------
 Titulo "1. Interfaces (antes do teste)"
 $preferida = Mostrar-Interfaces
 
@@ -161,18 +161,18 @@ if ($wifi.Count -eq 0) {
 }
 if ($caboUp.Count -eq 0) {
     Erro "NÃO tens cabo ligado (nenhuma interface Ethernet ativa)."
-    Write-Host "        Este teste desliga a Wi-Fi — sem cabo ficarias sem rede. Nada foi alterado." -ForegroundColor Yellow
+    Write-Host "        Este teste desliga a Wi-Fi - sem cabo ficarias sem rede. Nada foi alterado." -ForegroundColor Yellow
     Write-Host "        Liga o cabo ao PC e ao router, confirma que fica 'Up', e volta a correr este script." -ForegroundColor Yellow
     Write-Host "        Se o cabo estiver ligado e continuar 'Down', o problema pode ser o próprio cabo/porta." -ForegroundColor Yellow
     return
 }
 Info ("Cabo ativo: " + ($caboUp.Name -join ', ') + "   |   Wi-Fi ativa: " + ($wifi.Name -join ', '))
 
-# ── 2) Com Wi-Fi ───────────────────────────────────────────────────────────
+# -- 2) Com Wi-Fi -----------------------------------------------------------
 Titulo "2. Medição COM Wi-Fi ligada"
 $comWifi = Medir-Velocidade "Resultados (Wi-Fi ligada):"
 
-# ── 3) Sem Wi-Fi (cabo) ────────────────────────────────────────────────────
+# -- 3) Sem Wi-Fi (cabo) ----------------------------------------------------
 Titulo "3. Medição SEM Wi-Fi (só cabo)"
 $resultadoCabo = $null
 $wifiDesligada = $false
@@ -207,12 +207,12 @@ try {
         }
         foreach ($w in $wifi) {
             $ad = Get-NetAdapter -Name $w.Name -ErrorAction SilentlyContinue
-            if ($ad -and $ad.Status -eq 'Up') { Ok ($w.Name + " ligada outra vez.") } else { Warn ($w.Name + " ainda não voltou — liga-a em Definições > Rede (ou na tecla do teclado).") }
+            if ($ad -and $ad.Status -eq 'Up') { Ok ($w.Name + " ligada outra vez.") } else { Warn ($w.Name + " ainda não voltou - liga-a em Definições > Rede (ou na tecla do teclado).") }
         }
     }
 }
 
-# ── Resumo ─────────────────────────────────────────────────────────────────
+# -- Resumo -----------------------------------------------------------------
 Titulo "RESUMO DO TESTE A/B"
 if ($comWifi) { Write-Host ("  Com Wi-Fi :  " + ([math]::Round($comWifi.Mbps,1)).ToString().PadLeft(7) + " Mbps   (" + $comWifi.Nome + ")") -ForegroundColor Gray }
 if ($resultadoCabo) { Write-Host ("  Só cabo   :  " + ([math]::Round($resultadoCabo.Mbps,1)).ToString().PadLeft(7) + " Mbps   (" + $resultadoCabo.Nome + ")") -ForegroundColor Gray }
@@ -225,11 +225,11 @@ if ($comWifi -and $resultadoCabo -and $comWifi.Mbps -gt 0 -and $resultadoCabo.Mb
     if ($resultadoCabo.Mbps -lt 300) {
         Erro "O CABO também está lento (<300 Mbps numa linha de 1 Gbps). Não é problema de Wi-Fi: verifica cabo/porta do router, Green Ethernet/Gigabit Lite na NIC Ethernet, e o router (QoS)."
     } elseif ($razao -lt 0.5) {
-        Warn "A Wi-Fi entrega menos de metade do cabo — o Wi-Fi (AX200) está a limitar. Vê a secção 4e do guia: driver 24.20.2.1, canal/160MHz, antenas, autotuning TCP."
+        Warn "A Wi-Fi entrega menos de metade do cabo - o Wi-Fi (AX200) está a limitar. Vê a secção 4e do guia: driver 24.20.2.1, canal/160MHz, antenas, autotuning TCP."
     } elseif ($razao -gt 0.8) {
-        Ok "A Wi-Fi está próxima do cabo — o Wi-Fi não é o problema. Se o Steam continua lento, é limite do Steam/QoS/disco (secções 3, 4b e 7)."
+        Ok "A Wi-Fi está próxima do cabo - o Wi-Fi não é o problema. Se o Steam continua lento, é limite do Steam/QoS/disco (secções 3, 4b e 7)."
     } else {
-        Info "A Wi-Fi entrega entre 50% e 80% do cabo — dentro do normal. Não é aqui que está o teu gargalo."
+        Info "A Wi-Fi entrega entre 50% e 80% do cabo - dentro do normal. Não é aqui que está o teu gargalo."
     }
     Write-Host ""
     Info "Guarda este resultado: repete depois de atualizar o driver do AX200 para 24.20.2.1 e compara."

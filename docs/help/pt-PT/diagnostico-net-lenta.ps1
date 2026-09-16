@@ -1,5 +1,5 @@
 ﻿<#
-    diagnostico-net-lenta.ps1  —  "a minha net ficou má" : uma passagem de diagnóstico
+    diagnostico-net-lenta.ps1  -  "a minha net ficou má" : uma passagem de diagnóstico
     ----------------------------------------------------------------------------------
     Corres isto quando algo está lento a transferir (Steam, Epic, downloads) e queres
     saber rapidamente ONDE está o gargalo: linha/ISP, Wi-Fi/cabo, router, PC, disco,
@@ -39,18 +39,18 @@ $script:Falhas = New-Object System.Collections.ArrayList
 $script:Alertas = New-Object System.Collections.ArrayList
 $script:Veredito = New-Object System.Collections.ArrayList
 
-# ── Saída também para ficheiro, para poderes colar num ticket/fórum ──────────
+# -- Saída também para ficheiro, para poderes colar num ticket/fórum ----------
 $raiz = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
 $logFicheiro = Join-Path $raiz ("diagnostico-rede-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + ".txt")
 try { Start-Transcript -Path $logFicheiro -Force | Out-Null } catch { }
 
 function Titulo($texto) {
     Write-Host ""
-    Write-Host ("═" * 78) -ForegroundColor DarkGray
+    Write-Host ("=" * 78) -ForegroundColor DarkGray
     Write-Host ("  " + $texto) -ForegroundColor Cyan
-    Write-Host ("═" * 78) -ForegroundColor DarkGray
+    Write-Host ("=" * 78) -ForegroundColor DarkGray
 }
-function Sub($texto) { Write-Host ("  · " + $texto) -ForegroundColor Gray }
+function Sub($texto) { Write-Host ("  - " + $texto) -ForegroundColor Gray }
 function Ok($texto)  { Write-Host ("  [OK]    " + $texto) -ForegroundColor Green }
 function Warn($texto) {
     Write-Host ("  [ATENÇÃO] " + $texto) -ForegroundColor Yellow
@@ -78,12 +78,12 @@ function ConvertTo-Mbps($texto) {
 }
 
 Write-Host ""
-Write-Host "  DIAGNÓSTICO DE REDE — iniciado $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor White
+Write-Host "  DIAGN-STICO DE REDE - iniciado $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor White
 Write-Host "  Máquina: $env:COMPUTERNAME   Utilizador: $env:USERNAME" -ForegroundColor DarkGray
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # 0. Contexto do sistema
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "0. Contexto do sistema"
 Sub ("SO: " + (Get-CimInstance Win32_OperatingSystem).Caption + " build " + [System.Environment]::OSVersion.Version)
 $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
@@ -103,10 +103,10 @@ if ($correndo) {
     Info ("Processos relevantes em execução: " + ($correndo -join ", "))
     foreach ($p in $correndo) {
         if ($p -match 'omniroute|mitm|fiddler|charles|burp|clash|v2ray|xray|sing-box') {
-            Warn ("'" + $p + "' está em execução — qualquer proxy/interceção ativa pode estar a limitar TODO o tráfego.")
+            Warn ("'" + $p + "' está em execução - qualquer proxy/interceção ativa pode estar a limitar TODO o tráfego.")
         }
         if ($p -match 'qbittorrent|utorrent') {
-            Warn ("'" + $p + "' está em execução — clientes de torrent saturam a linha e a tabela NAT do router.")
+            Warn ("'" + $p + "' está em execução - clientes de torrent saturam a linha e a tabela NAT do router.")
         }
     }
 } else {
@@ -123,13 +123,13 @@ try {
             $_.CommandLine -notmatch 'docs[\\/]help[\\/]pt-PT'
         } | Select-Object -First 6
     foreach ($c in $porCmd) {
-        Warn ("Processo de proxy/interceção detetado pela linha de comando: " + $c.Name + " (pid " + $c.ProcessId + "). Se não o estás a usar agora, fecha-o — pode estar a limitar/atrasar todo o tráfego.")
+        Warn ("Processo de proxy/interceção detetado pela linha de comando: " + $c.Name + " (pid " + $c.ProcessId + "). Se não o estás a usar agora, fecha-o - pode estar a limitar/atrasar todo o tráfego.")
     }
 } catch { }
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # 1. Ligação e camada física
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "1. Interface de rede e camada física"
 try {
     $adaptadores = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
@@ -159,7 +159,7 @@ try {
                 $rx = [regex]::Match($netsh, '(?im)^\s*(Taxa de receção|Receive rate)\s*:\s*([\d\.]+)').Groups[2].Value
                 Sub ("Wi-Fi: SSID='" + $ssid + "'  canal=" + $canal + "  sinal=" + $sinal + "%  banda=" + $banda + "  rx=" + $rx + " Mbps")
                 if ($sinal -and [int]$sinal -lt 60) { Warn ("Sinal Wi-Fi fraco (" + $sinal + "%). Ligação a 1 Gbps por Wi-Fi nestas condições dá 10-80 Mbps reais.") }
-                if ($banda -match '2,4|2\.4') { Warn "Estás ligado a Wi-Fi 2,4 GHz — o teto prático ronda os 100-150 Mbps mesmo com bom sinal. Usa 5/6 GHz ou cabo." }
+                if ($banda -match '2,4|2\.4') { Warn "Estás ligado a Wi-Fi 2,4 GHz - o teto prático ronda os 100-150 Mbps mesmo com bom sinal. Usa 5/6 GHz ou cabo." }
                 if ($canal -and [int]$canal -le 14) { Warn "Canal em 2,4 GHz (muito congestionado em zonas residenciais)." }
             } catch { }
         }
@@ -187,15 +187,15 @@ try {
     }
 } catch { }
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # 1b. Chip de rede, driver e propriedades que estrangulam
 #     (Intel I219 = 1 Gbps; I225/I226 = 2,5 Gbps com defeitos conhecidos de
 #      negociação; "Killer" = marca Intel com limite de banda por aplicação)
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # 1b. Chip de rede, driver e propriedades que estrangulam
 #     (Intel I217/I218/I219 = 1 Gbps; I225/I226 = 2,5 Gbps com defeitos
 #      conhecidos de negociação; "Killer" = marca Intel com limite por app)
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "1b. Chip de rede, driver e propriedades que estrangulam"
 try {
     $nics = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' }
@@ -206,7 +206,7 @@ try {
         Sub ("    Driver: " + $n.DriverProvider + " " + $n.DriverVersion + "   (" + $dd + ")")
         try {
             if ($n.DriverDate -and ([datetime]$n.DriverDate) -lt (Get-Date).AddYears(-3)) {
-                Warn ("O driver de " + $n.Name + " é de " + $dd + " (mais de 3 anos). Em NICs Intel isto explica quedas de link e velocidade errática — atualiza com o Intel Driver & Support Assistant (DSA).")
+                Warn ("O driver de " + $n.Name + " é de " + $dd + " (mais de 3 anos). Em NICs Intel isto explica quedas de link e velocidade errática - atualiza com o Intel Driver & Support Assistant (DSA).")
             }
         } catch { }
 
@@ -215,14 +215,14 @@ try {
             if ($n.InterfaceDescription -match 'I225|I226') {
                 Warn ("Intel I225/I226 (2,5 Gbps) detetada. Casos conhecidos: o link cai para 100 Mbps ou 1 Gbps com 'Energy Efficient Ethernet' ligado, driver antigo, ou certos routers/switches. Atualiza o driver e desliga EEE/Green Ethernet.")
             } elseif ($n.InterfaceDescription -match 'I219|I218|I217') {
-                Sub "    Nota: I219/I218 é uma NIC de 1 Gbps — o teto prático é ~940 Mbps."
+                Sub "    Nota: I219/I218 é uma NIC de 1 Gbps - o teto prático é ~940 Mbps."
             } elseif ($n.InterfaceDescription -match 'I210|I211|I350') {
                 Sub "    Nota: I210/I211/I350 é uma NIC de 1 Gbps (server-grade)."
             } elseif ($n.InterfaceDescription -match 'X520|X540|X550|X710') {
-                Sub "    Nota: série X5xx/X7xx = 10 Gbps — confirma que o router/switch também é 10G ou 2,5G."
+                Sub "    Nota: série X5xx/X7xx = 10 Gbps - confirma que o router/switch também é 10G ou 2,5G."
             }
             if ($n.InterfaceDescription -match 'Killer|Connectivity Performance') {
-                Warn "Esta placa é 'Killer' (marca Intel). O Killer Control Center / Intel Connectivity Performance Suite tem controlo de largura de banda POR APLICAÇÃO — abre-o e confirma que não há limite de download (o clássico é 10 Mbps)."
+                Warn "Esta placa é 'Killer' (marca Intel). O Killer Control Center / Intel Connectivity Performance Suite tem controlo de largura de banda POR APLICAÇÃO - abre-o e confirma que não há limite de download (o clássico é 10 Mbps)."
             }
         }
 
@@ -242,9 +242,9 @@ try {
                 if ($sd.DisplayValue -notmatch 'Auto|Autom') {
                     $forcado = ConvertTo-Mbps $sd.DisplayValue
                     if ($maxMbps -gt 0 -and $forcado -gt 0 -and $forcado -lt $maxMbps) {
-                        Warn ("'" + $sd.DisplayName + "' está FORÇADO a '" + $sd.DisplayValue + "' mas a placa suporta " + $maxMbps + " Mbps. Estás a estrangular o link a " + $forcado + " Mbps — põe em Auto Negotiation.")
+                        Warn ("'" + $sd.DisplayName + "' está FORÇADO a '" + $sd.DisplayValue + "' mas a placa suporta " + $maxMbps + " Mbps. Estás a estrangular o link a " + $forcado + " Mbps - põe em Auto Negotiation.")
                     } else {
-                        Sub ("    Nota: '" + $sd.DisplayName + "' está forçado a '" + $sd.DisplayValue + "'. Não te está a limitar (a placa suporta o mesmo ou mais), mas Auto Negotiation é mais seguro — se o link andar instável, volta a Auto.")
+                        Sub ("    Nota: '" + $sd.DisplayName + "' está forçado a '" + $sd.DisplayValue + "'. Não te está a limitar (a placa suporta o mesmo ou mais), mas Auto Negotiation é mais seguro - se o link andar instável, volta a Auto.")
                     }
                 }
             }
@@ -256,7 +256,7 @@ try {
                 }
             }
             # Offloads de WoWLAN: causa conhecida de Wi-Fi lento em alguns chips Intel
-            # (sobretudo AX200/AX201). São inocuos de desligar — testa um de cada vez.
+            # (sobretudo AX200/AX201). São inocuos de desligar - testa um de cada vez.
             $off = $adv | Where-Object { $_.DisplayName -match 'Offload for WoWLAN|WoWLAN|Packet Coalescing|ARP Offload|NS Offload' }
             $ligados = @($off | Where-Object { $_.DisplayValue.Trim() -match '^(Enabled|On|Ativado|Habilitado|Yes|Ligado|Sim)$' })
             if ($ligados.Count -gt 0) {
@@ -291,7 +291,7 @@ try {
     if ($progs) {
         Sub "Software de gestão/aceleração de rede instalado (candidato a limite de banda):"
         foreach ($pr in $progs) { Sub ("    " + $pr.DisplayName + "  " + $pr.DisplayVersion) }
-        Warn "Existe software de gestão de rede instalado. Abre-o e confirma que não há um PERFIL com limite de download (o valor típico destes bloqueios é 10 Mbps). Se não usas, desinstala — vários instalam filtros de rede próprios."
+        Warn "Existe software de gestão de rede instalado. Abre-o e confirma que não há um PERFIL com limite de download (o valor típico destes bloqueios é 10 Mbps). Se não usas, desinstala - vários instalam filtros de rede próprios."
     } else {
         Ok "Sem software de gestão/limitação de banda instalado (Killer/GameFirst/Turbo LAN/LAN Manager/NetLimiter/cFosSpeed/...)."
     }
@@ -300,10 +300,10 @@ try {
     foreach ($sv in $svcs) { Sub ("Serviço relacionado: " + $sv.Name + " (" + $sv.Status + ")") }
 } catch { }
 
-# ────────────────────────────────────────────────────────────────────────────
-# 1c. POR ONDE ESTÁ A SAIR O TRÁFEGO  — a pergunta que decide tudo quando há
+# ----------------------------------------------------------------------------
+# 1c. POR ONDE ESTÁ A SAIR O TRÁFEGO  - a pergunta que decide tudo quando há
 #     Wi-Fi e cabo ligados ao mesmo tempo (o Windows escolhe pela métrica).
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "1c. Interface que transporta o tráfego (métricas de rota)"
 try {
     $ifs = Get-NetIPInterface -AddressFamily IPv4 -ErrorAction SilentlyContinue |
@@ -319,7 +319,7 @@ try {
         Sub ("Rota preferida (menor métrica): " + $preferida.InterfaceAlias + " [" + $adPref.InterfaceDescription + "]")
         $ehWifi = ($adPref.InterfaceDescription -match 'Wireless|Wi-Fi|802\.11|Wi-Fi') -or ($adPref.PhysicalMediaType -match '802\.11')
         if ($ehWifi) {
-            Warn "O TRÁFEGO ESTÁ A SAIR PELA WI-FI, não pelo cabo! Se tens o cabo ligado, desliga a Wi-Fi (ou baixa a métrica do Ethernet) e volta a medir — é a diferença entre ~10-80 Mbps e ~940 Mbps."
+            Warn "O TRÁFEGO ESTÁ A SAIR PELA WI-FI, não pelo cabo! Se tens o cabo ligado, desliga a Wi-Fi (ou baixa a métrica do Ethernet) e volta a medir - é a diferença entre ~10-80 Mbps e ~940 Mbps."
         }
     }
     $rotas = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Sort-Object RouteMetric
@@ -347,18 +347,18 @@ try {
         }
         Sub ($n.Name + ": link=" + $n.LinkSpeed + " | full duplex=" + $n.FullDuplex + " | MTU=" + $n.MtuSize + " | MAC=" + $n.MacAddress + " | descartes desde o arranque=" + $descartes + " (" + $pct + "%)")
         if ($descartes -gt 1000 -and $pct -gt 0.05) {
-            Warn ("Descartes significativos em " + $n.Name + ": " + $descartes + " pacotes (" + $pct + "% do recebido). Cabo/porta com problemas ou link saturado — troca o cabo e a porta do router, e repete.")
+            Warn ("Descartes significativos em " + $n.Name + ": " + $descartes + " pacotes (" + $pct + "% do recebido). Cabo/porta com problemas ou link saturado - troca o cabo e a porta do router, e repete.")
         }
     }
 } catch { }
 
-# ────────────────────────────────────────────────────────────────────────────
-# 2. PROXIES PRESOS  — suspeito nº1 quando "a net ficou má de repente"
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
+# 2. PROXIES PRESOS  - suspeito nº1 quando "a net ficou má de repente"
+# ----------------------------------------------------------------------------
 Titulo "2. Proxies e interceção ativa (suspeito nº 1)"
 $proxyEncontrado = $false
 
-# 2.1 WinHTTP (netsh) — é isto que o OmniRoute/Traffic Inspector usa no Windows
+# 2.1 WinHTTP (netsh) - é isto que o OmniRoute/Traffic Inspector usa no Windows
 try {
     $winhttp = (netsh winhttp show proxy) -join "`n"
     Sub "netsh winhttp show proxy:"
@@ -369,7 +369,7 @@ try {
     }
 } catch { }
 
-# 2.2 Proxy de utilizador/Internet Options (WinINET) — afeta Edge, Steam(parcialmente), updaters
+# 2.2 Proxy de utilizador/Internet Options (WinINET) - afeta Edge, Steam(parcialmente), updaters
 try {
     $reg = Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction SilentlyContinue
     if ($reg) {
@@ -378,7 +378,7 @@ try {
             $proxyEncontrado = $true
             Warn ("Proxy de sistema (WinINET) ligado para " + $reg.ProxyServer + ". Desliga em Definições > Rede e Internet > Proxy, ou no painel do OmniRoute em Traffic Inspector > 'Restore system proxy'.")
         }
-        if ($reg.AutoConfigURL) { Warn ("PAC/AutoConfigURL definido (" + $reg.AutoConfigURL + ") — cada pedido passa por uma resolução de script; atrasa muito downloads.") }
+        if ($reg.AutoConfigURL) { Warn ("PAC/AutoConfigURL definido (" + $reg.AutoConfigURL + ") - cada pedido passa por uma resolução de script; atrasa muito downloads.") }
     }
     $regPc = Get-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction SilentlyContinue
     if ($regPc -and ($regPc.ProxyEnable -eq 1)) { Warn ("Proxy ao nível da máquina (HKLM) ativo: " + $regPc.ProxyServer) }
@@ -390,7 +390,7 @@ foreach ($v in @('HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','NO_PROXY','http_proxy',
     if (-not $val) { $val = [System.Environment]::GetEnvironmentVariable($v, 'Machine') }
     if ($val) {
         Sub ($v + " = " + $val)
-        if ($val -match '127\.0\.0\.1|localhost') { $proxyEncontrado = $true; Warn ($v + " aponta para localhost — se o proxy morreu, tudo o que use esta variável falha ou arrasta.") }
+        if ($val -match '127\.0\.0\.1|localhost') { $proxyEncontrado = $true; Warn ($v + " aponta para localhost - se o proxy morreu, tudo o que use esta variável falha ou arrasta.") }
     }
 }
 
@@ -407,9 +407,9 @@ try {
 
 if (-not $proxyEncontrado) { Ok "Nenhum proxy preso detetado (WinHTTP, WinINET e variáveis de ambiente limpas)." }
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # 3. DNS
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "3. DNS"
 try {
     $dns = Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
@@ -430,9 +430,9 @@ try {
     }
 } catch { Warn ("Falha na análise de DNS: " + $_.Exception.Message) }
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # 4. Latência, perda, jitter  +  BUFFERBLOAT
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "4. Latência, perda de pacotes e bufferbloat"
 
 function Get-PingStats($alvo, $contagem) {
@@ -466,7 +466,7 @@ foreach ($f in $fontes) {
     $s = Get-PingStats $f.Alvo $reps
     if (-not $s) { Warn ("Sem resposta de " + $f.Nome); continue }
     if ($s.Perda -ge 100 -and $s.Media -eq 0) {
-        Warn ("Sem resposta de " + $f.Nome + " (ICMP bloqueado pela rede/ISP ou alvo inacessível) — sem medição de latência/perda aqui.")
+        Warn ("Sem resposta de " + $f.Nome + " (ICMP bloqueado pela rede/ISP ou alvo inacessível) - sem medição de latência/perda aqui.")
         continue
     }
     Sub ($f.Nome.PadRight(30) + " min " + $s.Min + " ms | média " + $s.Media + " ms | max " + $s.Max + " ms | jitter " + $s.Jitter + " ms | perda " + $s.Perda + "%")
@@ -476,8 +476,8 @@ foreach ($f in $fontes) {
         # 1.1.1.1 não responde a ICMP em muitas redes; usa o Google como referência.
         $bufBase = $s; $bufAlvo = $f.Alvo
     }
-    if ($s.Perda -gt 1) { Warn ("Perda de pacotes de " + $s.Perda + "% em " + $f.Nome + " — ligação instável (cabo/Wi-Fi/router/ISP).") }
-    if ($s.Jitter -gt 30) { Warn ("Jitter alto (" + $s.Jitter + " ms) em " + $f.Nome + " — mau para jogos e para o próprio TCP (descarregamentos aos soluços).") }
+    if ($s.Perda -gt 1) { Warn ("Perda de pacotes de " + $s.Perda + "% em " + $f.Nome + " - ligação instável (cabo/Wi-Fi/router/ISP).") }
+    if ($s.Jitter -gt 30) { Warn ("Jitter alto (" + $s.Jitter + " ms) em " + $f.Nome + " - mau para jogos e para o próprio TCP (descarregamentos aos soluços).") }
 }
 
 # Bufferbloat: mede a latência ENQUANTO a linha está saturada.
@@ -499,8 +499,8 @@ if ($curlExe -and $bufBase -and -not $SemDisco) {
         if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
         if ($bufCarregado) {
             $delta = $bufCarregado.Media - $bufBase.Media
-            Sub ("Em carga: média " + $bufCarregado.Media + " ms  (repouso " + $bufBase.Media + " ms  →  +" + $delta + " ms)")
-            if ($bufCarregado.Perda -gt 3) { Warn ("Com a linha ocupada perdes " + $bufCarregado.Perda + "% dos pacotes — o router está a encher a fila e a descartar. Ativa SQM/QoS (fq_codel) no router.") }
+            Sub ("Em carga: média " + $bufCarregado.Media + " ms  (repouso " + $bufBase.Media + " ms  ->  +" + $delta + " ms)")
+            if ($bufCarregado.Perda -gt 3) { Warn ("Com a linha ocupada perdes " + $bufCarregado.Perda + "% dos pacotes - o router está a encher a fila e a descartar. Ativa SQM/QoS (fq_codel) no router.") }
             if ($delta -gt 200) {
                 Warn ("BUFFERBLOAT grave: +" + $delta + " ms quando a linha enche. Um download a 10 Mbit/s pode deixar a casa toda sem net utilizável. Solução: SQM/QoS/QoS adaptativo no router, ou limitar a velocidade de download a ~90% da linha.")
             } elseif ($delta -gt 80) {
@@ -514,12 +514,12 @@ if ($curlExe -and $bufBase -and -not $SemDisco) {
         if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
     }
 } elseif (-not $curlExe) {
-    Info "curl.exe não encontrado — salto o teste de bufferbloat (o Windows 10 1803+ traz curl.exe em C:\Windows\System32)."
+    Info "curl.exe não encontrado - salto o teste de bufferbloat (o Windows 10 1803+ traz curl.exe em C:\Windows\System32)."
 }
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # 5. MTU / fragmentação
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "5. MTU (fragmentação de pacotes)"
 $mtuOk = $false
 foreach ($tam in @(1472, 1464, 1452, 1400, 1300, 1272, 548)) {
@@ -533,11 +533,11 @@ foreach ($tam in @(1472, 1464, 1452, 1400, 1300, 1272, 548)) {
         break
     }
 }
-if (-not $mtuOk) { Warn "Não passou nenhum payload, mesmo pequeno — a resposta ICMP com DF está a ser bloqueada ou a linha tem problemas." }
+if (-not $mtuOk) { Warn "Não passou nenhum payload, mesmo pequeno - a resposta ICMP com DF está a ser bloqueada ou a linha tem problemas." }
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # 6. Velocidade real de download
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "6. Velocidade real de download (só medições válidas)"
 Info "O plano é 1000 Mbps / 100 Mbps. O teto prático é ~90-95% disso com tudo limpo."
 Info "Uma medição só conta se transferir >=20 MB (ficheiros pequenos dão números falsos)."
@@ -568,11 +568,11 @@ foreach ($f in $fontesVel) {
             $mbps = $bps * 8.0 / 1000000.0
             $resultados += [pscustomobject]@{ Nome = $f.Nome; Valido = $true; Motivo = ''; Mbps = $mbps; MB = $mb; Seg = $seg }
             $cor = 'Green'; if ($mbps -lt 300) { $cor = 'Yellow' }; if ($mbps -lt 100) { $cor = 'Red' }
-            Write-Host ("  · " + $f.Nome.PadRight(16) + " " + ([math]::Round($mbps,1)).ToString().PadLeft(7) + " Mbps   (" + $mb + " MB em " + [math]::Round($seg,1) + " s)") -ForegroundColor $cor
+            Write-Host ("  - " + $f.Nome.PadRight(16) + " " + ([math]::Round($mbps,1)).ToString().PadLeft(7) + " Mbps   (" + $mb + " MB em " + [math]::Round($seg,1) + " s)") -ForegroundColor $cor
         } else {
             $motivo = if ($http -ne 200) { "HTTP $http" } elseif ($bytes -lt $minBytes) { "so $mb MB (curto para medir)" } else { 'sem resposta' }
             $resultados += [pscustomobject]@{ Nome = $f.Nome; Valido = $false; Motivo = $motivo; Mbps = 0; MB = $mb; Seg = $seg }
-            Write-Host ("  · " + $f.Nome.PadRight(16) + " INVALIDO: " + $motivo) -ForegroundColor DarkYellow
+            Write-Host ("  - " + $f.Nome.PadRight(16) + " INVALIDO: " + $motivo) -ForegroundColor DarkYellow
         }
     } else {
         try {
@@ -585,18 +585,18 @@ foreach ($f in $fontesVel) {
             if ($total -ge $minBytes) {
                 $mbps = ($total * 8.0) / 1000000.0 / $sw.Elapsed.TotalSeconds
                 $resultados += [pscustomobject]@{ Nome = $f.Nome; Valido = $true; Motivo = ''; Mbps = $mbps; MB = [math]::Round($total/1MB,1); Seg = $sw.Elapsed.TotalSeconds }
-                Write-Host ("  · " + $f.Nome.PadRight(16) + " " + ([math]::Round($mbps,1)).ToString().PadLeft(7) + " Mbps") -ForegroundColor Green
+                Write-Host ("  - " + $f.Nome.PadRight(16) + " " + ([math]::Round($mbps,1)).ToString().PadLeft(7) + " Mbps") -ForegroundColor Green
             }
         } catch { }
     }
 }
 
-# Steam: só confirma o ACESSO (o ficheiro do instalador tem ~2 MB — não mede velocidade)
+# Steam: só confirma o ACESSO (o ficheiro do instalador tem ~2 MB - não mede velocidade)
 try {
     if ($curlSpeed) {
         $st = & $curlSpeed -s -o NUL -w '%{http_code}' --max-time 10 'https://cdn.cloudflare.steamstatic.com/client/installer/SteamSetup.exe' 2>$null
-        if (($st | Out-String).Trim() -eq '200') { Ok "Steam CDN acessivel (HTTP 200) — nao usada para velocidade (ficheiro pequeno)." }
-        else { Warn ("Steam CDN devolveu HTTP " + ($st | Out-String).Trim() + " — pode estar bloqueada ou filtrada.") }
+        if (($st | Out-String).Trim() -eq '200') { Ok "Steam CDN acessivel (HTTP 200) - nao usada para velocidade (ficheiro pequeno)." }
+        else { Warn ("Steam CDN devolveu HTTP " + ($st | Out-String).Trim() + " - pode estar bloqueada ou filtrada.") }
     }
 } catch { }
 
@@ -606,30 +606,30 @@ if ($validosVel.Count -gt 0) {
     Sub ("Melhor resultado: " + $melhor.Nome + " = " + [math]::Round($melhor.Mbps,1) + " Mbps (" + [math]::Round($melhor.Mbps/8,1) + " MB/s)")
     [void]$script:Veredito.Add([pscustomobject]@{ Chave = 'download'; Valor = $melhor.Mbps })
     if ($melhor.Mbps -lt 50) {
-        Erro "Nenhuma fonte passou dos 50 Mbps. A ligação real está longe do plano — o problema NÃO é do Steam."
+        Erro "Nenhuma fonte passou dos 50 Mbps. A ligação real está longe do plano - o problema NÃO é do Steam."
     } elseif ($melhor.Mbps -lt 300) {
         Warn ("Máximo de " + [math]::Round($melhor.Mbps,1) + " Mbps. Numa linha de 1 Gbps isto aponta para link a 100 Mbps (cabo/porta/NIC), QoS do router, ou Wi-Fi.")
     } else {
-        Ok ("Ligação a " + [math]::Round($melhor.Mbps,1) + " Mbps — linha saudável. Se o Steam continua lento, o gargalo é do Steam ou do disco.")
+        Ok ("Ligação a " + [math]::Round($melhor.Mbps,1) + " Mbps - linha saudável. Se o Steam continua lento, o gargalo é do Steam ou do disco.")
     }
     if ($validosVel.Count -ge 2) {
         $pior = $validosVel | Sort-Object Mbps | Select-Object -First 1
         if ($melhor.Mbps -gt 200 -and $pior.Mbps -lt ($melhor.Mbps / 4)) {
-            Warn ("Diferença enorme entre CDNs (" + $pior.Nome + ": " + [math]::Round($pior.Mbps,1) + " Mbps vs " + $melhor.Nome + ": " + [math]::Round($melhor.Mbps,1) + " Mbps). Típico de peering/rota do ISP para essa rede — testar DNS 1.1.1.1 e outra hora do dia.")
+            Warn ("Diferença enorme entre CDNs (" + $pior.Nome + ": " + [math]::Round($pior.Mbps,1) + " Mbps vs " + $melhor.Nome + ": " + [math]::Round($melhor.Mbps,1) + " Mbps). Típico de peering/rota do ISP para essa rede - testar DNS 1.1.1.1 e outra hora do dia.")
         }
     }
 } else {
     Warn "INCONCLUSIVO: nenhuma fonte deu uma medição válida (>=20 MB). Isto NÃO significa 'linha lenta'."
     Info "Confirma à mão e vê o erro: curl.exe -v -o NUL --max-time 15 `"https://speed.cloudflare.com/__down?bytes=20000000`""
-    Info "Se aparecer 'SSL certificate problem' / 'schannel', há inspeção HTTPS ativa (antivírus ou Traffic Inspector do OmniRoute — secção 8)."
+    Info "Se aparecer 'SSL certificate problem' / 'schannel', há inspeção HTTPS ativa (antivírus ou Traffic Inspector do OmniRoute - secção 8)."
 }
-Info "Nota: o Steam instala com centenas de ficheiros pequenos — a velocidade 'útil' é sempre bem menor que o teste de 100 MB, e o disco/CPU contam."
+Info "Nota: o Steam instala com centenas de ficheiros pequenos - a velocidade 'útil' é sempre bem menor que o teste de 100 MB, e o disco/CPU contam."
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # 6b. Opções TCP globais do Windows (autotuning do receive window)
 #     Quando isto está desligado, muitos adaptadores (sobretudo Intel AX200)
 #     não passam dos 50-100 Mbps em downloads grandes. É um clássico.
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "6b. Opções TCP globais do Windows"
 try {
     $tcp = (netsh int tcp show global) -join "`n"
@@ -646,7 +646,7 @@ try {
         }
     }
     if ($tcp -match '(?im)^\s*(Chimney Offload State|TCP Chimney Offload)[^:]*:\s*(enabled|ativado)') {
-        Warn "TCP Chimney Offload está ligado — em placas Intel antigas já causou débito baixo. Testa: netsh int tcp set global chimney=disabled"
+        Warn "TCP Chimney Offload está ligado - em placas Intel antigas já causou débito baixo. Testa: netsh int tcp set global chimney=disabled"
     }
 } catch { Warn ("Não consegui ler as opções TCP globais: " + $_.Exception.Message) }
 
@@ -673,7 +673,7 @@ try {
         Select-Object Subject, Thumbprint, NotAfter, NotBefore
     if ($certs) {
         foreach ($cert in $certs) {
-            Warn ("Certificado raiz de interceção instalado: " + $cert.Subject + "  (válido até " + $cert.NotAfter.ToString('yyyy-MM-dd') + ", thumbprint " + $cert.Thumbprint.Substring(0,16) + "…)")
+            Warn ("Certificado raiz de interceção instalado: " + $cert.Subject + "  (válido até " + $cert.NotAfter.ToString('yyyy-MM-dd') + ", thumbprint " + $cert.Thumbprint.Substring(0,16) + "...)")
         }
         Sub "Remover (PowerShell como admin): Get-ChildItem Cert:\CurrentUser\Root | Where-Object { `$_.Subject -match 'OmniRoute' } | Remove-Item"
     } else {
@@ -681,9 +681,9 @@ try {
     }
 } catch { }
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # 8. Steam
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "8. Configuração do Steam"
 try {
     $steamPath = (Get-ItemProperty -Path 'HKCU:\Software\Valve\Steam' -Name SteamPath -ErrorAction SilentlyContinue).SteamPath
@@ -728,9 +728,9 @@ try {
     if ($bf) { Info ("Processo do Battlefield em execução: " + (($bf | Select-Object -ExpandProperty ProcessName) -join ", ")) }
 } catch { Warn ("Análise do Steam falhou: " + $_.Exception.Message) }
 
-# ────────────────────────────────────────────────────────────────────────────
-# 9. Disco — o suspeito invisível dos downloads grandes
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
+# 9. Disco - o suspeito invisível dos downloads grandes
+# ----------------------------------------------------------------------------
 Titulo "9. Escrita em disco (onde os jogos instalam)"
 if ($SemDisco) {
     Info "Teste de disco saltado (-SemDisco)."
@@ -776,7 +776,7 @@ if ($SemDisco) {
     foreach ($letra in $discosTestar) {
         $pasta = $letra + '\'
         if (-not (Test-Path $pasta)) {
-            Warn ("Disco " + $pasta + " não existe/inacessível — se o Steam aponta para lá, é mais um problema em cima.")
+            Warn ("Disco " + $pasta + " não existe/inacessível - se o Steam aponta para lá, é mais um problema em cima.")
             continue
         }
         try {
@@ -789,7 +789,7 @@ if ($SemDisco) {
             }
             $mbpsDisco = $r.MBs
             $cor = 'Green'; if ($mbpsDisco -lt 120) { $cor = 'Yellow' }; if ($mbpsDisco -lt 60) { $cor = 'Red' }
-            Write-Host ("  · Escrita em " + $pasta.PadRight(6) + " " + [math]::Round($mbpsDisco,0).ToString().PadLeft(6) + " MB/s  (" + [math]::Round($mbpsDisco*8/1000,2) + " Gbps)") -ForegroundColor $cor
+            Write-Host ("  - Escrita em " + $pasta.PadRight(6) + " " + [math]::Round($mbpsDisco,0).ToString().PadLeft(6) + " MB/s  (" + [math]::Round($mbpsDisco*8/1000,2) + " Gbps)") -ForegroundColor $cor
             if ($mbpsDisco -lt 60) {
                 Warn ("Disco " + $pasta + " escreve a " + [math]::Round($mbpsDisco,0) + " MB/s. Isto limita QUALQUER download a ~" + [math]::Round($mbpsDisco*8/1000,1) + " Gbps (>1 Gbps é o esperado num NVMe). HDD ou disco quase cheio?")
             }
@@ -800,21 +800,21 @@ if ($SemDisco) {
     try {
         $smart = Get-WmiObject -Namespace 'root\wmi' -Class MSStorageDriver_FailurePredictStatus -ErrorAction SilentlyContinue
         foreach ($s in $smart) {
-            if ($s.PredictFailure) { Warn ("SMART do disco " + $s.InstanceName + " prevê falha — backup já, e verifica com CrystalDiskInfo.") }
+            if ($s.PredictFailure) { Warn ("SMART do disco " + $s.InstanceName + " prevê falha - backup já, e verifica com CrystalDiskInfo.") }
         }
     } catch { }
 }
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # RESUMO
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "RESUMO"
 if ($script:Falhas.Count -eq 0 -and $script:Alertas.Count -eq 0) {
     Ok "Nenhum problema detetado nesta passagem. Guarda o relatório e repete o teste a meio de um download lento."
 } else {
     if ($script:Falhas.Count -gt 0) {
         Write-Host ("  FALHAS (" + $script:Falhas.Count + "):") -ForegroundColor Red
-        foreach ($f in $script:Falhas) { Write-Host ("   ✗ " + $f) -ForegroundColor Red }
+        foreach ($f in $script:Falhas) { Write-Host ("   x " + $f) -ForegroundColor Red }
     }
     if ($script:Alertas.Count -gt 0) {
         Write-Host ("  ATENÇÃO (" + $script:Alertas.Count + "):") -ForegroundColor Yellow
@@ -833,7 +833,7 @@ if ($dl) {
         Write-Host "  VEREDITO: a linha/PC está a entregar menos de 50 Mbps. O problema é de rede/PC, não do Steam nem do BF6." -ForegroundColor Red
         Write-Host "            Ordem de ataque: cabo em vez de Wi-Fi -> reiniciar router -> testar com outro PC -> chamar o ISP." -ForegroundColor Red
     } elseif ($dl.Valor -lt 300) {
-        Write-Host "  VEREDITO: entre 50 e 300 Mbps. Ligação utilizável mas abaixo do plano de 1 Gbps — foca-te em Wi-Fi/cabo/router/QoS." -ForegroundColor Yellow
+        Write-Host "  VEREDITO: entre 50 e 300 Mbps. Ligação utilizável mas abaixo do plano de 1 Gbps - foca-te em Wi-Fi/cabo/router/QoS." -ForegroundColor Yellow
     } else {
         Write-Host "  VEREDITO: a linha entrega bem (>300 Mbps). Se o Steam continua a 10 Mbit/s, o gargalo é do Steam ou do disco." -ForegroundColor Green
         Write-Host "            Verifica: limite de downloads do Steam, região de download, disco saturado/HDD, e ficheiros pequenos (instalação)." -ForegroundColor Green

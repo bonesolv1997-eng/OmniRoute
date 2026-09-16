@@ -1,5 +1,5 @@
-<#
-    medir-velocidade.ps1 — teste de velocidade (30 s) com validação de medições.
+﻿<#
+    medir-velocidade.ps1 - teste de velocidade (30 s) com validação de medições.
 
     Correção importante (v2): só aceita uma medição se tiver transferido pelo menos
     20 MB. Ficheiros pequenos (como o SteamSetup.exe, ~2,3 MB) davam números falsos.
@@ -9,7 +9,7 @@
         powershell -ExecutionPolicy Bypass -File .\medir-velocidade.ps1 -MB 200
 
     Como lê o resultado:
-        VÁLIDO    = transferiu ≥20 MB e HTTP 200 -> o número é a velocidade real
+        VÁLIDO    = transferiu >=20 MB e HTTP 200 -> o número é a velocidade real
         INVÁLIDO  = HTTP != 200, transferência curta, ou ligação falhada
         O resumo só usa medições VÁLIDAS. Se nenhuma for válida, diz INCONCLUSIVO
         (não inventa um veredito).
@@ -21,7 +21,7 @@ param([int]$MB = 100)
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 
-function Linha { Write-Host ("  " + ("─" * 72)) -ForegroundColor DarkGray }
+function Linha { Write-Host ("  " + ("-" * 72)) -ForegroundColor DarkGray }
 function Ok($t) { Write-Host ("  [OK]      " + $t) -ForegroundColor Green }
 function Warn($t) { Write-Host ("  [ATENÇÃO] " + $t) -ForegroundColor Yellow }
 function Info($t) { Write-Host ("  [i]       " + $t) -ForegroundColor DarkCyan }
@@ -31,7 +31,7 @@ $MIN_BYTES_VALIDO = 20MB
 $MAX_SEGUNDOS = 15
 
 # Fontes: todas com ficheiros de ~100 MB ou download de tamanho controlado.
-# (O Hetzner foi removido — falha em muitas redes. O Steam CDN deixou de ser usado
+# (O Hetzner foi removido - falha em muitas redes. O Steam CDN deixou de ser usado
 #  para velocidade: o SteamSetup.exe tem ~2 MB e não mede nada.)
 $Fontes = @(
     @{ Nome = 'Cloudflare'; Url = 'https://speed.cloudflare.com/__down?bytes=' + ($MB * 1000000) },
@@ -44,10 +44,10 @@ $Fontes = @(
 $curl = (Get-Command curl.exe -ErrorAction SilentlyContinue).Source
 
 Write-Host ""
-Write-Host "  TESTE DE VELOCIDADE — $(Get-Date -Format 'HH:mm:ss')" -ForegroundColor White
+Write-Host "  TESTE DE VELOCIDADE - $(Get-Date -Format 'HH:mm:ss')" -ForegroundColor White
 Linha
 
-# ── Por onde sai o tráfego ─────────────────────────────────────────────────
+# -- Por onde sai o tráfego -------------------------------------------------
 try {
     $ifs = @(Get-NetIPInterface -AddressFamily IPv4 -ErrorAction SilentlyContinue |
         Where-Object { $_.ConnectionState -eq 'Connected' } | Sort-Object InterfaceMetric)
@@ -55,7 +55,7 @@ try {
         $ad = Get-NetAdapter -InterfaceIndex $i.ifIndex -ErrorAction SilentlyContinue
         $marca = ""
         if ($ifs[0].ifIndex -eq $i.ifIndex) { $marca = "   <-- rota preferida" }
-        Write-Host ("  · " + $i.InterfaceAlias.PadRight(14) + " metric=" + ([string]$i.InterfaceMetric).PadRight(6) + " link=" + ([string]$ad.LinkSpeed).PadRight(10) + " [" + $ad.InterfaceDescription + "]" + $marca) -ForegroundColor $(if ($marca) { 'Yellow' } else { 'Gray' })
+        Write-Host ("  - " + $i.InterfaceAlias.PadRight(14) + " metric=" + ([string]$i.InterfaceMetric).PadRight(6) + " link=" + ([string]$ad.LinkSpeed).PadRight(10) + " [" + $ad.InterfaceDescription + "]" + $marca) -ForegroundColor $(if ($marca) { 'Yellow' } else { 'Gray' })
     }
     if ($ifs.Count -gt 0) {
         $pref = Get-NetAdapter -InterfaceIndex $ifs[0].ifIndex -ErrorAction SilentlyContinue
@@ -65,7 +65,7 @@ try {
     }
 } catch { Write-Host "  (nao consegui ler as interfaces)" -ForegroundColor DarkGray }
 
-# ── Latência base ──────────────────────────────────────────────────────────
+# -- Latência base ----------------------------------------------------------
 $base = $null
 try {
     $p = Test-Connection -ComputerName '8.8.8.8' -Count 6 -ErrorAction SilentlyContinue
@@ -76,10 +76,10 @@ try {
     }
 } catch { }
 
-# ── Medições ───────────────────────────────────────────────────────────────
+# -- Medições ---------------------------------------------------------------
 Linha
 if (-not $curl) {
-    Warn "curl.exe nao encontrado — a tentar com .NET (menos preciso)."
+    Warn "curl.exe nao encontrado - a tentar com .NET (menos preciso)."
 }
 
 $resultados = @()
@@ -134,13 +134,13 @@ foreach ($f in $Fontes) {
 foreach ($r in $resultados) {
     if ($r.Valido) {
         $cor = 'Green'; if ($r.Mbps -lt 300) { $cor = 'Yellow' }; if ($r.Mbps -lt 100) { $cor = 'Red' }
-        Write-Host ("  · " + $r.Nome.PadRight(16) + " " + ([math]::Round($r.Mbps,1)).ToString().PadLeft(7) + " Mbps   (" + $r.MB + " MB em " + [math]::Round($r.Seg,1) + " s)") -ForegroundColor $cor
+        Write-Host ("  - " + $r.Nome.PadRight(16) + " " + ([math]::Round($r.Mbps,1)).ToString().PadLeft(7) + " Mbps   (" + $r.MB + " MB em " + [math]::Round($r.Seg,1) + " s)") -ForegroundColor $cor
     } else {
-        Write-Host ("  · " + $r.Nome.PadRight(16) + " INVALIDO: " + $r.Motivo) -ForegroundColor DarkYellow
+        Write-Host ("  - " + $r.Nome.PadRight(16) + " INVALIDO: " + $r.Motivo) -ForegroundColor DarkYellow
     }
 }
 
-# ── Latência sob carga ─────────────────────────────────────────────────────
+# -- Latência sob carga -----------------------------------------------------
 $validos = @($resultados | Where-Object { $_.Valido })
 $melhor = $validos | Sort-Object Mbps -Descending | Select-Object -First 1
 
@@ -163,14 +163,14 @@ if ($curl -and $base -and $melhor) {
     }
 }
 
-# ── Resumo ─────────────────────────────────────────────────────────────────
+# -- Resumo -----------------------------------------------------------------
 Linha
 if ($melhor) {
     Write-Host ("  MELHOR MEDICAO VALIDA: " + [math]::Round($melhor.Mbps,1) + " Mbps (" + $melhor.Nome + ", " + $melhor.MB + " MB)") -ForegroundColor White
     if ($melhor.Mbps -lt 100) {
-        Erro ("Abaixo de 100 Mbps (" + [math]::Round($melhor.Mbps,1) + " Mbps). Muito longe do plano de 1 Gbps — verifica cabo/porta, a NIC (Realtek?), drivers e QoS do router.")
+        Erro ("Abaixo de 100 Mbps (" + [math]::Round($melhor.Mbps,1) + " Mbps). Muito longe do plano de 1 Gbps - verifica cabo/porta, a NIC (Realtek?), drivers e QoS do router.")
     } elseif ($melhor.Mbps -lt 300) {
-        Warn ("Entre 100 e 300 Mbps (" + [math]::Round($melhor.Mbps,1) + " Mbps). Abaixo do plano — cheira a link a 100 Mbps, QoS, ou Wi-Fi.")
+        Warn ("Entre 100 e 300 Mbps (" + [math]::Round($melhor.Mbps,1) + " Mbps). Abaixo do plano - cheira a link a 100 Mbps, QoS, ou Wi-Fi.")
     } elseif ($melhor.Mbps -lt 700) {
         Info ("Entre 300 e 700 Mbps (" + [math]::Round($melhor.Mbps,1) + " Mbps). Bom, mas ainda há margem numa linha de 1 Gbps.")
     } else {
@@ -178,10 +178,10 @@ if ($melhor) {
     }
 } else {
     Warn "INCONCLUSIVO: nenhuma fonte deu uma medicao valida (>=20 MB transferidos)."
-    Write-Host "       Isto NAO significa 'linha lenta' — significa que os testes falharam. Possiveis causas:" -ForegroundColor Yellow
-    Write-Host "         · inspetor HTTPS/antivirus a bloquear os downloads (ve o passo abaixo);" -ForegroundColor Gray
-    Write-Host "         · rede com filtro de URLs/CGNAT do operador;" -ForegroundColor Gray
-    Write-Host "         · DNS a devolver resultados errados." -ForegroundColor Gray
+    Write-Host "       Isto NAO significa 'linha lenta' - significa que os testes falharam. Possiveis causas:" -ForegroundColor Yellow
+    Write-Host "         - inspetor HTTPS/antivirus a bloquear os downloads (ve o passo abaixo);" -ForegroundColor Gray
+    Write-Host "         - rede com filtro de URLs/CGNAT do operador;" -ForegroundColor Gray
+    Write-Host "         - DNS a devolver resultados errados." -ForegroundColor Gray
     Write-Host ""
     Write-Host "       Confirma a mao (mostra o erro exato):" -ForegroundColor White
     Write-Host "         curl.exe -v -o NUL --max-time 15 `"https://speed.cloudflare.com/__down?bytes=20000000`"" -ForegroundColor Gray

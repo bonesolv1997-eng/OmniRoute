@@ -1,25 +1,25 @@
 ﻿<#
-    kit.ps1 — ponto de entrada ÚNICO do kit de diagnóstico de rede (PT-PT).
+    kit.ps1 - ponto de entrada ÚNICO do kit de diagnóstico de rede (PT-PT).
 
     A ideia: nunca mais escreves o nome de um ficheiro. Este script descarrega os
     outros três sozinho e corre-os por caminho absoluto, por isso o erro
     "The argument '.\\nome.ps1' to the -File parameter does not exist" deixa de
     poder acontecer.
 
-    Uso — sem guardar nada no disco (o mais simples, copia as 2 linhas):
+    Uso - sem guardar nada no disco (o mais simples, copia as 2 linhas):
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         iex (iwr 'https://raw.githubusercontent.com/bonesolv1997-eng/OmniRoute/arena/01a0aae0-omniroute/docs/help/pt-PT/kit.ps1' -UseBasicParsing).Content
 
-    Uso — guardado em disco (menu igual):
+    Uso - guardado em disco (menu igual):
         powershell -ExecutionPolicy Bypass -File .\kit.ps1
 
-    Uso — direto, sem menu (útil para automatizar):
+    Uso - direto, sem menu (útil para automatizar):
         -Tarefa diagnostico | velocidade | wifi | wifi-aplicar | wifi-reverter | baixar | ler
 
     Notas:
-      · a opção 4 (aplicar) precisa de administrador — o script abre ele próprio a
+      - a opção 4 (aplicar) precisa de administrador - o script abre ele próprio a
         janela elevada, não tens de fazer nada;
-      · não altera nada do sistema nas opções 1, 2, 3, 6 e 7.
+      - não altera nada do sistema nas opções 1, 2, 3, 6 e 7.
 #>
 
 [CmdletBinding()]
@@ -33,7 +33,7 @@ $ProgressPreference = 'SilentlyContinue'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 
 $BASE = 'https://raw.githubusercontent.com/bonesolv1997-eng/OmniRoute/arena/01a0aae0-omniroute/docs/help/pt-PT'
-$SCRIPTS = @('diagnostico-net-lenta.ps1', 'medir-velocidade.ps1', 'teste-ab-wifi.ps1', 'desligar-poupanca-wifi.ps1', 'baixar-kit.ps1', 'correr-diagnostico.cmd', 'kit.cmd', 'README.md')
+$SCRIPTS = @('diagnostico-net-lenta.ps1', 'medir-velocidade.ps1', 'teste-ab-wifi.ps1', 'desligar-poupanca-wifi.ps1', 'baixar-kit.ps1', 'correr-diagnostico.cmd', 'kit.cmd', 'verificar-kit.sh', 'README.md')
 
 # Quando corrido via iex, $PSScriptRoot vem vazio: usamos uma pasta fixa em %TEMP%.
 $raiz = if ($PSScriptRoot) { $PSScriptRoot } else { Join-Path $env:TEMP 'omniroute-kit' }
@@ -67,7 +67,7 @@ function Baixar-Tudo {
     $ok = 0; $falhas = @()
     foreach ($f in $SCRIPTS) {
         $destino = Join-Path $raiz $f
-        Write-Host ("  · " + $f.PadRight(30)) -NoNewline
+        Write-Host ("  - " + $f.PadRight(30)) -NoNewline
         try {
             Invoke-WebRequest -UseBasicParsing -Uri ($BASE + '/' + $f) -OutFile $destino -TimeoutSec 30 -ErrorAction Stop
             Unblock-File -LiteralPath $destino -ErrorAction SilentlyContinue
@@ -141,7 +141,7 @@ if ($Tarefa -eq 'wifi-reverter') { Correr-Elevado 'desligar-poupanca-wifi.ps1' @
 if ($Tarefa -eq 'baixar') { Baixar-Tudo; return }
 if ($Tarefa -eq 'ler') { Abrir-Guia; return }
 
-# ── Menu ───────────────────────────────────────────────────────────────────
+# -- Menu -------------------------------------------------------------------
 while ($true) {
     Write-Host "  O que queres fazer?" -ForegroundColor White
     Write-Host ""
@@ -158,7 +158,7 @@ while ($true) {
 
     $escolha = ''
     try { $escolha = (Read-Host "  Escolhe (0-7)").Trim() } catch {
-        Write-Host "  (sem entrada interativa — usa -Tarefa, ex: -Tarefa diagnostico)" -ForegroundColor Yellow
+        Write-Host "  (sem entrada interativa - usa -Tarefa, ex: -Tarefa diagnostico)" -ForegroundColor Yellow
         return
     }
 

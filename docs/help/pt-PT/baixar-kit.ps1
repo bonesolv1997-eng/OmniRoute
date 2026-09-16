@@ -1,12 +1,12 @@
 ﻿<#
-    baixar-kit.ps1 — descarrega TODOS os scripts deste kit para uma pasta e deixa tudo pronto.
+    baixar-kit.ps1 - descarrega TODOS os scripts deste kit para uma pasta e deixa tudo pronto.
 
     Uso (não precisa de administrador):
         powershell -ExecutionPolicy Bypass -File .\baixar-kit.ps1
         powershell -ExecutionPolicy Bypass -File .\baixar-kit.ps1 -Destino 'C:\Temp\kit'
 
     Por omissão, a pasta é:  Downloads\omniroute-net-kit
-    No fim, o script imprime os comandos exatos para cada ferramenta — a partir da pasta
+    No fim, o script imprime os comandos exatos para cada ferramenta - a partir da pasta
     onde os ficheiros ficam, os comandos funcionam sempre.
 #>
 
@@ -27,6 +27,7 @@ $ficheiros = @(
     'correr-diagnostico.cmd',
     'README.md',
     'diagnostico-net-lenta.sh',
+    'verificar-kit.sh',
     'checar-nic-macos-linux.sh'
 )
 
@@ -55,7 +56,7 @@ $ok = 0; $falhou = @()
 foreach ($f in $ficheiros) {
     $url = $BASE + '/' + $f
     $alvo = Join-Path $Destino $f
-    Write-Host ("  · " + $f.PadRight(32)) -NoNewline
+    Write-Host ("  - " + $f.PadRight(32)) -NoNewline
     try {
         Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $alvo -TimeoutSec 30 -ErrorAction Stop
         Unblock-File -LiteralPath $alvo -ErrorAction SilentlyContinue

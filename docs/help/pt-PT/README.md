@@ -100,6 +100,7 @@ Este passo de 30 segundos identifica a maioria dos casos sozinho.
 > | Teste de velocidade | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\medir-velocidade.ps1"` |
 > | Wi-Fi (só ver) | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\desligar-poupanca-wifi.ps1"` |
 > | Teste A/B Wi-Fi vs cabo | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\omniroute-kit\teste-ab-wifi.ps1"` (eleva-se sozinho) |
+| Atualizar todos os ficheiros | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\kit.ps1"` → opção **7** |
 > | Wi-Fi (aplicar) | bloco **"Aplicar o Wi-Fi (eleva-se sozinho)"** logo abaixo — ou abrir PowerShell **como administrador** e correr a linha anterior com `-Aplicar` no fim |
 >
 > Os caminhos acima são **absolutos** (`$env:TEMP\...`) e não têm `.\`: é isso que os torna à
@@ -138,7 +139,7 @@ opções. Esse lançador: muda para a pasta correta, desbloqueia o ficheiro
 | `A execução de scripts foi desativada neste sistema` | Política de execução (`Restricted`/`AllSigned`) | `powershell -ExecutionPolicy Bypass -File .\diagnostico-net-lenta.ps1` (é o que já está na linha de comando) ou, na sessão atual: `Set-ExecutionPolicy -Scope Process Bypass -Force` |
 | `Este ficheiro veio de outro computador e está bloqueado` / `não está assinado digitalmente` | *Mark of the Web* (descarregaste pela Internet) | `Unblock-File .\diagnostico-net-lenta.ps1` — ou duplo clique no `correr-diagnostico.cmd`, que o faz por ti |
 | `Não é possível carregar o ficheiro ... porque está numa unidade de rede/OneDrive` | PowerShell bloqueia scripts em algumas localizações sincronizadas | Copia a pasta para `C:\Temp` e corre a partir daí |
-| Erros de sintaxe ou acentos trocados (`Ã©`, `â€”`) | Ficheiro guardado noutra codificação | Usa a versão do repositório (**já está gravada com BOM UTF-8**, que o PowerShell 5.1 lê bem). Se editaste o ficheiro, guarda como *UTF-8 com BOM*. |
+| Erros de sintaxe com `â€”`, `â”€`, `Â·` no meio do código<br>(ex.: `Unexpected token '€" * 72))'`) | O ficheiro foi lido como **Windows-1252** porque **não tem BOM UTF-8**. Os caracteres decorativos (`─`, `—`, `·`) viram aspas tipográficas, e o PowerShell usa-as como delimitadores de string — parte o ficheiro todo | Volta a descarregar (todas as versões do repositório têm **BOM UTF-8** e já não usam esses caracteres decorativos). Se editaste o ficheiro, guarda como *UTF-8 com BOM*. Verifica com `bash verificar-kit.sh` |
 | `powershell : O termo 'powershell' não é reconhecido` | A correr dentro do próprio PowerShell ou num CMD sem PATH | `Get-Command powershell` para confirmar; no PowerShell basta `.\diagnostico-net-lenta.ps1` (sem a palavra `powershell` à frente) |
 | `The argument '.\desligar-poupanca-wifi.ps1' ... does not exist`<br>(idem para `medir-velocidade.ps1`, `diagnostico-net-lenta.ps1`) | O ficheiro **não está na pasta atual** — ou ainda não foi descarregado, ou está em `%TEMP%`/`Downloads` e o comando procura em `.\` | Usa o **menu do kit** (`kit.cmd`, ou as 4 linhas do ponto 3) ou os caminhos **absolutos** da tabela da Regra de ouro, acima |
 
@@ -757,6 +758,7 @@ Depois:
 | `curl -o NUL https://proof.ovh.net/files/100Mb.dat` | Teste de 100 MB sem interface web (Hetzner falha em muitas redes) |
 | Cloudflare Speed Test / Waveform Bufferbloat | Latência sob carga (bufferbloat) |
 | `medir-velocidade.ps1` (deste kit) | A/B rápido: interface + latência + velocidade em 30 s |
+| `verificar-kit.sh` (deste kit) | Verifica BOM UTF-8, caracteres de risco, CRLF dos `.cmd` e sintaxe dos `.sh` |
 | CrystalDiskInfo / `smartctl` | Saúde e velocidade do disco |
 | Intel Driver & Support Assistant (DSA) | Deteta e atualiza driver da NIC Intel |
 | `ethtool -S eth0` / `ethtool --show-eee eth0` | Erros de descarte e estado do EEE (Linux) |
@@ -788,6 +790,12 @@ Segundo relatório (teste A/B Wi-Fi vs cabo e ajustes de energia):
 | Teste A/B: **Wi-Fi = 93 % do cabo** (82,8 vs 89 Mbps) | A Wi-Fi (AX200) **não** está a limitar | Seguir para o cabo/Steam |
 | Ethernet é **"Realtek PCIe GbE Family Controller"** (não Intel) | O alvo no cabo é o driver/propriedades **Realtek** | Secção 4b-bis |
 | Cloudflare "0 Mbps (0 MB em 0,1 s)" e Steam CDN "2,3 MB em 0,2 s" | **Medições inválidas**: ligação falhada + ficheiro de 2,3 MB | Corrigido no kit v2 (`medir-velocidade.ps1` valida ≥20 MB); repetir |
+
+Terceiro relatório (erro de sintaxe ao correr `medir-velocidade.ps1`):
+
+| Observação | Leitura | Ação |
+|---|---|---|
+| `Unexpected token '€" * 72))'`, `Missing closing ')'`, `â”€`, `Â·` | O ficheiro foi lido como **Windows-1252**: faltava o **BOM UTF-8** (a reescrita do script perdeu-o) e os caracteres decorativos viraram aspas tipográficas | Corrigido: BOM garantido em todos os `.ps1` + separadores convertidos para ASCII + verificador `verificar-kit.sh` (com teste negativo que reproduz o bug) |
 
 Sequência de resolução (o que fazer por esta ordem): **limite do Steam → desligar a Wi-Fi e
 medir por cabo → Green Ethernet/Gigabit Lite off + driver Wi-Fi atualizado → trocar cabo/porta

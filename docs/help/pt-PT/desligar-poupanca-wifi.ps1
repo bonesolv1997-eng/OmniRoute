@@ -1,5 +1,5 @@
 ﻿<#
-    desligar-poupanca-wifi.ps1 — Wi-Fi: ver o chip/driver, e desligar a poupança de energia
+    desligar-poupanca-wifi.ps1 - Wi-Fi: ver o chip/driver, e desligar a poupança de energia
     --------------------------------------------------------------------------------------
     Sem argumentos  -> só MOSTRA o estado e o que faria (não altera nada).
     -Aplicar        -> aplica: desliga a gestão de energia do adaptador, põe as
@@ -34,7 +34,7 @@ Write-Host ""
 Write-Host "  WI-FI: CHIP, DRIVER E POUPANÇA DE ENERGIA" -ForegroundColor White
 Write-Host ("  Modo: " + $(if ($Aplicar) { "APLICAR (altera o sistema)" } elseif ($Reverter) { "REVERTER" } else { "só diagnóstico (não altera nada)" }) + "   |   Administrador: " + $ehAdmin) -ForegroundColor DarkGray
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "1. Adaptadores Wi-Fi"
 
 $adapta = @(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {
@@ -51,7 +51,7 @@ foreach ($a in $adapta) {
     $dd = ""
     try { if ($a.DriverDate) { $dd = ([datetime]$a.DriverDate).ToString('yyyy-MM-dd') } } catch { }
     Write-Host ""
-    Write-Host ("  · " + $a.Name + "  [" + $a.InterfaceDescription + "]") -ForegroundColor White
+    Write-Host ("  - " + $a.Name + "  [" + $a.InterfaceDescription + "]") -ForegroundColor White
     Det ("Estado: " + $a.Status + "   |   Link: " + $a.LinkSpeed + "   |   Driver: " + $a.DriverProvider + " " + $a.DriverVersion + "   (" + $dd + ")")
 
     # Identificar o chip -> onde se atualiza
@@ -63,7 +63,7 @@ foreach ($a in $adapta) {
             # Caso especial: AX200 (e o gémeo Killer AX1650) tem pacote PRÓPRIO e está EOL.
             # O pacote genérico (24.60/24.70) NÃO instala nada neste chip e ainda regista
             # uma versão mais recente que depois BLOQUEIA o instalador correto.
-            $onde = "ATENÇÃO — AX200: usa o pacote PRÓPRIO e final 'WiFi-24.20.2-Driver64-Win10-Win11.exe' (driver 24.20.2.1, o último que existirá: o produto está End of Life). Link: https://www.intel.com/content/www/us/en/download/915475/intel-wireless-wi-fi-drivers-for-intel-wi-fi-6-ax200.html . NAO instales o pacote generico 24.60/24.70 (o de Wi-Fi 7/6E/6/9000): nao cobre o AX200 e ainda bloqueia a instalacao correta. Bluetooth: pacote proprio, final 24.10.0.4."
+            $onde = "ATENÇÃO - AX200: usa o pacote PRÓPRIO e final 'WiFi-24.20.2-Driver64-Win10-Win11.exe' (driver 24.20.2.1, o último que existirá: o produto está End of Life). Link: https://www.intel.com/content/www/us/en/download/915475/intel-wireless-wi-fi-drivers-for-intel-wi-fi-6-ax200.html . NAO instales o pacote generico 24.60/24.70 (o de Wi-Fi 7/6E/6/9000): nao cobre o AX200 e ainda bloqueia a instalacao correta. Bluetooth: pacote proprio, final 24.10.0.4."
         } elseif ($desc -match 'BE2\d\d|AX2\d\d|AX411|AX211|AX210|AX203|AX201|AX101|9[0-9]{3}|Wireless-AC') {
             $onde = "Intel DSA (recomendado) ou o pacote oficial 'Intel Wireless Wi-Fi Drivers' (versão atual 24.70.0, 08/09/2026). O DSA escolhe sozinho o pacote certo para o teu modelo."
         }
@@ -72,7 +72,7 @@ foreach ($a in $adapta) {
         }
     } elseif ($desc -match 'MediaTek|RZ608|RZ616|MT79\d\d') {
         $fabricante = 'MediaTek'
-        $onde = "Adaptador MediaTek (muito comum em placas AMD — o RZ608/RZ616 são MediaTek MT7921/MT7922 com nome AMD). O Intel DSA NÃO o deteta: atualiza pelo site do fabricante da placa-mãe (modelo exato) ou pelo pacote da MediaTek/AMD."
+        $onde = "Adaptador MediaTek (muito comum em placas AMD - o RZ608/RZ616 são MediaTek MT7921/MT7922 com nome AMD). O Intel DSA NÃO o deteta: atualiza pelo site do fabricante da placa-mãe (modelo exato) ou pelo pacote da MediaTek/AMD."
     } elseif ($desc -match 'Realtek|RTL88') {
         $fabricante = 'Realtek'
         $onde = "Adaptador Realtek. O Intel DSA não serve: usa o site do fabricante da placa-mãe (ou do dongle, se for USB)."
@@ -91,7 +91,7 @@ foreach ($a in $adapta) {
 
     try {
         if ($a.DriverDate -and ([datetime]$a.DriverDate) -lt (Get-Date).AddYears(-3)) {
-            Warn ("O driver de " + $a.Name + " é de " + $dd + " — tem mais de 3 anos. Num adaptador Intel, saltar de 2021 para a série 24.x traz melhorias grandes de estabilidade e de consumo; em MediaTek/Realtek a diferença também é notória.")
+            Warn ("O driver de " + $a.Name + " é de " + $dd + " - tem mais de 3 anos. Num adaptador Intel, saltar de 2021 para a série 24.x traz melhorias grandes de estabilidade e de consumo; em MediaTek/Realtek a diferença também é notória.")
         }
     } catch { }
 
@@ -102,7 +102,7 @@ foreach ($a in $adapta) {
         $pm = Get-NetAdapterPowerManagement -Name $a.Name -ErrorAction Stop
         Det ("Permitir que o Windows desligue este dispositivo: " + $pm.AllowComputerToTurnOffDevice)
         if ($pm.AllowComputerToTurnOffDevice -match 'Enabled') {
-            Warn "Está LIGADO — é isto que faz o Wi-Fi adormecer e a velocidade cair/parar a meio dos downloads."
+            Warn "Está LIGADO - é isto que faz o Wi-Fi adormecer e a velocidade cair/parar a meio dos downloads."
         } else {
             Ok "Já está desligado (ou o driver não suporta essa poupança)."
         }
@@ -144,7 +144,7 @@ foreach ($a in $adapta) {
     if ($mudar.Count -eq 0) { Ok "Nada a mudar aqui (ou o driver não expõe estas propriedades)." }
 }
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "2. Política de energia do plano ativo (Wi-Fi)"
 
 $saida = powercfg /query SCHEME_CURRENT 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12bbebe6-58d6-4636-95bb-3217ef867c1a 2>&1
@@ -156,7 +156,7 @@ if ($leitura) {
     Info "Não consegui ler a política de energia do Wi-Fi via powercfg (não é erro)."
 }
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "3. O que fazer"
 
 if ($Aplicar -or $Reverter) {
@@ -173,7 +173,7 @@ if ($Aplicar -or $Reverter) {
             catch { Info ("Não consegui religar a gestão de energia em " + $a.Name + " (o driver pode não suportar).") }
         } else {
             try { Disable-NetAdapterPowerManagement -Name $a.Name -ErrorAction Stop; Ok ("Gestão de energia DESLIGADA em " + $a.Name) }
-            catch { Warn ("Não consegui desligar a gestão de energia em " + $a.Name + " — faz manualmente em Gestor de Dispositivos > adaptador > Propriedades > Gestão de energia.") }
+            catch { Warn ("Não consegui desligar a gestão de energia em " + $a.Name + " - faz manualmente em Gestor de Dispositivos > adaptador > Propriedades > Gestão de energia.") }
         }
     }
 
@@ -185,7 +185,7 @@ if ($Aplicar -or $Reverter) {
     if ($LASTEXITCODE -eq 0) {
         Ok ("Política de energia do Wi-Fi definida para " + $(if ($Reverter) { "Equilibrado (média)" } else { "Máximo desempenho" }) + " no plano ativo.")
     } else {
-        Warn "powercfg não aceitou a alteração — faz pela interface: Painel de Controlo > Opções de Energia > Alterar definições do plano > Alterar definições avançadas > Definições do adaptador sem fios > Modo de poupança de energia > Máximo desempenho."
+        Warn "powercfg não aceitou a alteração - faz pela interface: Painel de Controlo > Opções de Energia > Alterar definições do plano > Alterar definições avançadas > Definições do adaptador sem fios > Modo de poupança de energia > Máximo desempenho."
     }
 
     if (-not $Reverter) {
@@ -194,7 +194,7 @@ if ($Aplicar -or $Reverter) {
                 Set-NetAdapterAdvancedProperty -Name $m.Adaptador -DisplayName $m.Propriedade -DisplayValue $m.Para -ErrorAction Stop
                 Ok ($m.Propriedade + ": '" + $m.De + "' -> '" + $m.Para + "'")
             } catch {
-                Warn ("Não consegui mudar '" + $m.Propriedade + "' — muda manualmente: Gestor de Dispositivos > adaptador > Propriedades > Avançadas.")
+                Warn ("Não consegui mudar '" + $m.Propriedade + "' - muda manualmente: Gestor de Dispositivos > adaptador > Propriedades > Avançadas.")
             }
         }
         Write-Host ""
@@ -210,35 +210,35 @@ if ($Aplicar -or $Reverter) {
     if ($mudar.Count -gt 0) {
         Write-Host ""
         Write-Host "  Vai mudar:" -ForegroundColor White
-        foreach ($m in $mudar) { Write-Host ("    · " + $m.Propriedade + ": '" + $m.De + "' -> '" + $m.Para + "'") -ForegroundColor Gray }
+        foreach ($m in $mudar) { Write-Host ("    - " + $m.Propriedade + ": '" + $m.De + "' -> '" + $m.Para + "'") -ForegroundColor Gray }
     }
 }
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 Titulo "4. Atualizar o driver (o que fazer à mão, passo a passo)"
 
 $temAX200 = @($adapta | Where-Object { $_.InterfaceDescription -match 'AX200|AX1650' }).Count -gt 0
 if ($temAX200) {
-    Write-Host "  AX200 detetado — pacote PRÓPRIO (o genérico 24.70.0 NÃO serve):" -ForegroundColor White
+    Write-Host "  AX200 detetado - pacote PRÓPRIO (o genérico 24.70.0 NÃO serve):" -ForegroundColor White
     Write-Host "    1. Página: https://www.intel.com/content/www/us/en/download/915475/intel-wireless-wi-fi-drivers-for-intel-wi-fi-6-ax200.html" -ForegroundColor Gray
     Write-Host "    2. Descarrega WiFi-24.20.2-Driver64-Win10-Win11.exe (driver final 24.20.2.1)." -ForegroundColor Gray
     Write-Host "    3. Fecha o Steam/jogo, corre o .exe, instala e reinicia." -ForegroundColor Gray
     Write-Host "    4. Confirma: Get-NetAdapter -Physical | Where-Object InterfaceDescription -match 'AX200' | Format-List DriverVersion, DriverDate" -ForegroundColor Gray
     Write-Host "    Bluetooth (separado, se precisares): https://www.intel.com/content/www/us/en/download/874349/intel-wireless-bluetooth-driver-for-intel-wi-fi-6-ax200.html" -ForegroundColor Gray
-    Write-Host "    Nota: o produto está End of Life — guarda este .exe para reinstalações futuras." -ForegroundColor DarkGray
+    Write-Host "    Nota: o produto está End of Life - guarda este .exe para reinstalações futuras." -ForegroundColor DarkGray
 } elseif ($fabricante -eq 'Intel') {
-    Write-Host "  Opção A — Intel DSA (recomendada, deteta sozinho):" -ForegroundColor White
+    Write-Host "  Opção A - Intel DSA (recomendada, deteta sozinho):" -ForegroundColor White
     Write-Host "    1. Abre https://www.intel.com/content/www/us/en/support/detect.html" -ForegroundColor Gray
     Write-Host "    2. Clica 'Download now', corre o instalador (UAC: Sim) e deixa instalar." -ForegroundColor Gray
     Write-Host "    3. O DSA abre no browser; autoriza o scan (botão 'Allow')." -ForegroundColor Gray
     Write-Host "    4. Em 'Wi-Fi' clica Download e depois Install; reinicia se ele pedir." -ForegroundColor Gray
     Write-Host ""
-    Write-Host "  Opção B — pacote oficial do driver Wi-Fi (manual):" -ForegroundColor White
+    Write-Host "  Opção B - pacote oficial do driver Wi-Fi (manual):" -ForegroundColor White
     Write-Host "    Página: https://www.intel.com/content/www/us/en/download/19351/intel-wireless-wi-fi-drivers-for-windows-10-and-windows-11.html" -ForegroundColor Gray
-    Write-Host "    Versão atual: 24.70.0 (08/09/2026) — ficheiro WiFi-24.70.0-Driver64-Win10-Win11.exe" -ForegroundColor Gray
+    Write-Host "    Versão atual: 24.70.0 (08/09/2026) - ficheiro WiFi-24.70.0-Driver64-Win10-Win11.exe" -ForegroundColor Gray
     Write-Host "    Cobre Wi-Fi 7 (BE200/BE201/BE202/BE211/BE213), Wi-Fi 6E (AX411/AX211/AX210)," -ForegroundColor Gray
     Write-Host "    Wi-Fi 6 (AX231/AX203/AX201/AX200/AX101) e 9000 (9560/9260/9462/9461)." -ForegroundColor Gray
-    Write-Host "    Nota: o AX200 e alguns 8xxx têm pacote próprio — o DSA escolhe o certo por ti." -ForegroundColor Gray
+    Write-Host "    Nota: o AX200 e alguns 8xxx têm pacote próprio - o DSA escolhe o certo por ti." -ForegroundColor Gray
 } else {
     Write-Host "  Como o adaptador não é Intel, o DSA não serve. Atualiza assim:" -ForegroundColor White
     Write-Host "    1. Descobre o modelo da placa-mãe:  wmic baseboard get product,manufacturer" -ForegroundColor Gray
@@ -249,5 +249,5 @@ if ($temAX200) {
 }
 
 Write-Host ""
-Info "Depois de atualizar o driver, corre o medir-velocidade.ps1 com a Wi-Fi ligada e desligada — só assim vês o ganho real."
+Info "Depois de atualizar o driver, corre o medir-velocidade.ps1 com a Wi-Fi ligada e desligada - só assim vês o ganho real."
 Write-Host ""
