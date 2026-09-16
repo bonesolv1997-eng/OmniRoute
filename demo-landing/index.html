@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OmniRoute — O gateway AI gratuito</title>
+  <meta name="description" content="359 providers, 150+ free tiers, um endpoint. Nunca pares de programar." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="noise"></div>
+  <header class="nav">
+    <a class="logo" href="#">OmniRoute</a>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#numbers">Números</a>
+      <a href="#how">Como funciona</a>
+      <a href="https://github.com/bonesolv1997-eng/OmniRoute" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+    <a class="btn btn-sm" href="https://omniroute.online" target="_blank" rel="noopener">Abrir dashboard</a>
+  </header>
+
+  <section class="hero">
+    <img class="hero-bg" src="hero.jpg" alt="" />
+    <div class="hero-veil"></div>
+    <div class="hero-inner">
+      <p class="eyebrow">Gateway AI · v3.8.51</p>
+      <h1>Todos os modelos.<br />Um endpoint. <em>$0 para começar.</em></h1>
+      <p class="lede">Claude Code, Codex, Cursor, Cline, Copilot — encaminhados para 359 providers, 150+ free tiers, ~1.47B tokens grátis/mês, com fallback automático.</p>
+      <div class="cta-row">
+        <a class="btn" href="https://github.com/bonesolv1997-eng/OmniRoute">Ver no GitHub</a>
+        <a class="btn ghost" href="#how">Ver o fluxo</a>
+      </div>
+      <div class="pills">
+        <span>19 estratégias de routing</span>
+        <span>RTK + Caveman compression</span>
+        <span>15–95% tokens poupados</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="numbers" class="stats">
+    <div class="stat"><strong data-count="359">0</strong><span>Providers</span></div>
+    <div class="stat"><strong data-count="150">0</strong><span>Free tiers</span></div>
+    <div class="stat"><strong>1.47B</strong><span>Tokens grátis / mês</span></div>
+    <div class="stat"><strong data-count="19">0</strong><span>Estratégias</span></div>
+  </section>
+
+  <section id="features" class="features">
+    <h2>O que um agente consegue fazer aqui</h2>
+    <p class="section-lede">GitHub ligado, repo OmniRoute no workspace — isto é um landing completo gerado nesta sessão, do zero.</p>
+    <div class="grid">
+      <article>
+        <h3>Landing em minutos</h3>
+        <p>HTML, CSS, JS, imagem hero, servidor local e preview. Sem frameworks pesados — entrega imediata.</p>
+      </article>
+      <article>
+        <h3>Lê o produto real</h3>
+        <p>Números e claims saem do README do repo: providers, free tiers, compressão, routing.</p>
+      </article>
+      <article>
+        <h3>Git nativo</h3>
+        <p>Branch de sessão, commit, push, PR — o GitHub já está autenticado nesta sandbox.</p>
+      </article>
+      <article>
+        <h3>UI viva</h3>
+        <p>Contadores, tabs de código, tema escuro, layout responsivo, copy em português.</p>
+      </article>
+      <article>
+        <h3>Não toca no core</h3>
+        <p>Site isolado em <code>demo-landing/</code> — o gateway Next.js do OmniRoute fica intacto.</p>
+      </article>
+      <article>
+        <h3>Próximo passo</h3>
+        <p>Pede um dashboard, docs, onboarding, i18n EN/PT, ou um PR de feature no código real.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="how" class="how">
+    <h2>Um endpoint, qualquer cliente</h2>
+    <div class="code-wrap">
+      <div class="tabs">
+        <button class="tab on" data-tab="curl">cURL</button>
+        <button class="tab" data-tab="js">JavaScript</button>
+        <button class="tab" data-tab="py">Python</button>
+      </div>
+      <pre id="curl" class="pane on"><code>curl https://api.omniroute.online/v1/chat/completions \
+  -H "Authorization: Bearer $OMNI_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"auto","messages":[{"role":"user","content":"ship it"}]}'</code></pre>
+      <pre id="js" class="pane"><code>const res = await fetch("/v1/chat/completions", {
+  method: "POST",
+  headers: { Authorization: `Bearer ${key}` },
+  body: JSON.stringify({ model: "auto", messages }),
+});</code></pre>
+      <pre id="py" class="pane"><code>from openai import OpenAI
+client = OpenAI(base_url="https://api.omniroute.online/v1", api_key=key)
+print(client.chat.completions.create(model="auto", messages=msgs))</code></pre>
+    </div>
+  </section>
+
+  <footer>
+    <p>Demo de velocidade · OmniRoute · branch <code>arena/01a0aa94-omniroute</code></p>
+    <a href="https://github.com/bonesolv1997-eng/OmniRoute">github.com/bonesolv1997-eng/OmniRoute</a>
+  </footer>
+  <script src="app.js"></script>
+</body>
+</html>
