@@ -121,7 +121,8 @@ $d = "$env:TEMP\omniroute-kit"; New-Item -ItemType Directory -Path $d -Force | O
 $f = "$d\medir-velocidade.ps1"
 Remove-Item $f -Force -ErrorAction SilentlyContinue
 $u = 'https://raw.githubusercontent.com/bonesolv1997-eng/OmniRoute/arena/01a0aae0-omniroute/docs/help/pt-PT/medir-velocidade.ps1?cb=' + [guid]::NewGuid().ToString('N')
-Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $f
+try { Invoke-WebRequest -UseBasicParsing -Uri ($u + '?cb=' + [guid]::NewGuid().ToString('N')) -OutFile $f }
+catch { Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $f }   # fallback sem cache-busting
 if ((Get-Content $f -Raw) -match 'KIT-VERSION: 2026\.09\.16\.4') {
     Unblock-File $f; & $f
 } else {
