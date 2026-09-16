@@ -38,6 +38,9 @@ powershell -ExecutionPolicy Bypass -File .\diagnostico-net-lenta.ps1
 ```powershell
 # Windows — teste rápido de 30 s (interface + latência + velocidade real)
 powershell -ExecutionPolicy Bypass -File .\medir-velocidade.ps1
+
+# Windows — ver chip/driver do Wi-Fi e desligar a poupança de energia (ver secção 4d)
+powershell -ExecutionPolicy Bypass -File .\desligar-poupanca-wifi.ps1
 ```
 
 ```bash
@@ -206,13 +209,128 @@ perfis com limite de download — o script lista os que encontrar instalados e a
 > (`Get-NetRoute -DestinationPrefix 0.0.0.0/0` → `InterfaceAlias`) — é comum a rota continuar
 > a passar pela Wi-Fi ou pela porta de 1G.
 
-### 4c. macOS / Apple Silicon (se for o teu caso)
+## 4c. macOS / Apple Silicon (se for o teu caso)
 
 Em Apple Silicon, ligar um adaptador USB/Thunderbolt de 2,5G cria por vezes um **bridge com o
 Wi-Fi** e o tráfego TCP passa a "andar por cima" da interface sem fios — a velocidade do cabo
 fica então limitada pelo Wi-Fi. Verifica com `ifconfig bridge0` / Preferências → Rede, e testa
 com o Wi-Fi desligado. O ficheiro `checar-nic-macos-linux.sh` deste kit faz esta verificação
 (3b) e o equivalente Linux de driver/EEE/erros de descarte (5b).
+
+---
+
+## 4d. Atualizar o driver do Wi-Fi e desligar a poupança de energia (passo a passo)
+
+> Há um script que faz isto por ti, com modo de teste: `desligar-poupanca-wifi.ps1`
+> (sem argumentos = só mostra; `-Aplicar` como administrador = aplica). Abaixo está o
+> equivalente à mão, para fazeres no interface.
+
+### Passo 0 — Saber que chip tens (decide tudo o resto)
+
+```powershell
+Get-NetAdapter | Where-Object { $_.PhysicalMediaType -match '802.11' } |
+  Format-List Name, InterfaceDescription, DriverProvider, DriverVersion, DriverDate
+```
+
+| Se a `InterfaceDescription` disser... | Onde se atualiza |
+|---|---|
+| **Intel Wi-Fi 6/6E/7** (AX200, AX201, AX210, AX211, BE200...), **9000** (9560, 9260) | **Intel DSA** (deteta sozinho) ou pacote oficial **24.70.0** (08/09/2026) |
+| **Killer** (AX1650, Wi-Fi 6/7 Killer) | **Intel Killer Performance Suite** (não o pacote genérico) |
+| **MediaTek / RZ608 / RZ616 / MT79xx** (muito comum em placas AMD) | Site do **fabricante da placa-mãe** — o DSA **não** deteta estes |
+| **Realtek (RTL88xx)**, **Qualcomm/Atheros**, **Broadcom** | Fabricante da placa-mãe (ou do dongle USB) |
+
+### Passo 1 — Atualizar o driver (Intel: 2 minutos)
+
+**Via Intel DSA (recomendado, é ele que escolhe o pacote certo):**
+
+1. Abre <https://www.intel.com/content/www/us/en/support/detect.html>
+2. `Download now` → corre o instalador → **Sim** no UAC → deixa instalar
+3. O DSA abre **no browser** → clica **Allow** para autorizar o scan
+4. Na lista de *Wi-Fi*, `Download` → `Install` → reinicia se ele pedir
+
+A versão atual do pacote Wi-Fi é a **24.70.0** (08/09/2026, ficheiro
+`WiFi-24.70.0-Driver64-Win10-Win11.exe`), que cobre Wi-Fi 7 (BE200/BE201/BE202/BE211/BE213),
+Wi-Fi 6E (AX411/AX211/AX210), Wi-Fi 6 (AX231/AX203/AX201) e 9000 (9560/9260/9462/9461)
+[4](https://www.intel.com/content/www/us/en/support/products/130293/wireless/intel-wi-fi-6-products/intel-wi-fi-6-series/intel-wi-fi-6-ax201-gig.html).
+
+**Sem DSA (manual):** página oficial
+<https://www.intel.com/content/www/us/en/download/19351/intel-wireless-wi-fi-drivers-for-windows-10-and-windows-11.html>
+→ aceitar a licença → descarregar → correr → reiniciar. (O AX200 e alguns 8xxx têm pacote
+próprio — outro motivo para preferir o DSA.)
+
+**Alternativas sem instalar nada:** Definições → Windows Update → Opções avançadas →
+**Atualizações opcionais → Atualizações de controladores** (menos recentes que o DSA), ou o
+site do fabricante da placa-mãe (obrigatório para MediaTek/Realtek).
+
+### Passo 2 — Desligar "permitir que o computador desligue este dispositivo"
+
+**No interface (o mais fiável, funciona com todos os drivers):**
+
+1. `Win+X` → **Gestor de Dispositivos**
+2. Abre **Adaptadores de rede**
+3. Botão direito no adaptador de **Wi-Fi** → **Propriedades**
+4. Separador **Gestão de energia** → desmarca
+   **"Permitir que o computador desligue este dispositivo para poupar energia"**
+5. Separador **Avançadas** → põe estes no valor indicado (os nomes variam com o driver):
+
+   | Propriedade | Valor |
+   |---|---|
+   | Power Saving Mode / Modo de economia de energia | **Maximum Performance** / *Desempenho máximo* |
+   | U-APSD support | **Disabled** |
+   | MIMO Power Save Mode | **No SMPS** (ou Disabled) |
+   | Sleep on WoWLAN | Disabled |
+   | Packet Coalescing | Disabled (opcional, baixa latência) |
+
+6. `OK`. O adaptador reinicia sozinho (~5 s sem ligação).
+
+**Pela linha de comando (PowerShell como Administrador):**
+
+```powershell
+# Ver o estado
+Get-NetAdapterPowerManagement -Name 'Wi-Fi' | Select-Object Name, AllowComputerToTurnOffDevice
+
+# Desligar a gestão de energia (equivale a desmarcar a caixa acima)
+Disable-NetAdapterPowerManagement -Name 'Wi-Fi'
+
+# Ver o que o driver expõe e o que está escolhido (nomes localizados — vê os DisplayName)
+Get-NetAdapterAdvancedProperty -Name 'Wi-Fi' | Where-Object DisplayName -match 'Power|WLAN|MIMO|APSD|Coalesc' |
+  Select-Object DisplayName, DisplayValue, ValidDisplayValues
+
+# Aplicar (usa o DisplayName EXATO que viste acima)
+Set-NetAdapterAdvancedProperty -Name 'Wi-Fi' -DisplayName 'U-APSD support' -DisplayValue 'Disabled'
+```
+
+### Passo 3 — Tirar a poupança do *plano de energia* (o sítio que quase todos esquecem)
+
+Painel de Controlo → **Opções de Energia** → **Alterar definições do plano** → **Alterar
+definições avançadas** → **Definições do adaptador sem fios → Modo de poupança de energia →
+Máximo desempenho** (no perfil *Equilibrado* está em *Média* por omissão, o que já reduz o
+débito).
+
+Ou numa linha (administrador; aplica ao plano ativo, corrente alternada + bateria):
+
+```powershell
+powercfg /setacvalueindex SCHEME_CURRENT 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12bbebe6-58d6-4636-95bb-3217ef867c1a 0
+powercfg /setdcvalueindex SCHEME_CURRENT 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12bbebe6-58d6-4636-95bb-3217ef867c1a 0
+powercfg /setactive SCHEME_CURRENT
+```
+
+### Passo 4 — Confirmar que valeu a pena
+
+```powershell
+Get-NetAdapter -Physical | Format-Table Name, InterfaceDescription, DriverVersion, DriverDate
+powershell -ExecutionPolicy Bypass -File .\medir-velocidade.ps1
+```
+
+Compara **Wi-Fi ligada** com **Wi-Fi desligada** (cabo): o `medir-velocidade.ps1` mostra qual é
+a rota preferida e a velocidade de cada cenário. Se a diferença não aparecer, o gargalo não
+estava aqui — e isso também é uma resposta útil.
+
+### O que **não** faz diferença
+
+- Desativar IPv6, "otimizadores" de registo, `netsh int tcp` sem critério — mito, ou pior.
+- Desligar o Bluetooth (partilha antena em chips combo, efeito marginal).
+- Trocar o canal da Wi-Fi: só ajuda quando são **outras** redes a interferir.
 
 ---
 
@@ -355,6 +473,8 @@ Depois:
 7. [ ] **Chip de rede (Intel?)**: driver atualizado, `Speed & Duplex = Auto`, EEE desligado,
    e sem **Killer Control Center / GameFirst / Intel Connectivity Performance Suite** com
    perfil de limite de banda (secção 4b).
+7b. [ ] **Wi-Fi**: driver atualizado (DSA) e poupança de energia desligada no adaptador **e**
+   no plano de energia (secções 4d, passo 2 e 3) — e medir com a Wi-Fi desligada, por cabo.
 8. [ ] Testar o mesmo ficheiro em hora de ponta e fora dela (peering/CDN).
 9. [ ] Se tudo isto falhar: testar diretamente ligado ao ONT/modem do ISP, e só depois
    abrir ticket no ISP com os números do relatório (velocidade, perda, jitter, MTU, horário).
