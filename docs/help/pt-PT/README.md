@@ -42,8 +42,8 @@ em algum sítio**: limite do Steam, QoS do router, software de fabricante, ou um
    ```
 
    Abre um **menu**: 1) diagnóstico completo, 2) teste de velocidade, 3) Wi-Fi (ver),
-   4) Wi-Fi (aplicar — abre ele próprio a janela de administrador), 5) reverter, 6) atualizar
-   ficheiros, 7) abrir este guia.
+   4) **teste A/B Wi-Fi vs cabo**, 5) Wi-Fi (aplicar — abre ele próprio a janela de
+   administrador), 6) reverter, 7) atualizar ficheiros, 8) abrir este guia.
 
    **b) Duplo clique:** guarda o **`kit.cmd`** (botão *Download raw file*) e faz duplo clique
    nele — faz o mesmo que (a):
@@ -99,6 +99,7 @@ Este passo de 30 segundos identifica a maioria dos casos sozinho.
 > | Diagnóstico completo | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\diagnostico-net-lenta.ps1"` |
 > | Teste de velocidade | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\medir-velocidade.ps1"` |
 > | Wi-Fi (só ver) | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\desligar-poupanca-wifi.ps1"` |
+> | Teste A/B Wi-Fi vs cabo | `powershell -ExecutionPolicy Bypass -File "$env:TEMP\omniroute-kit\teste-ab-wifi.ps1"` (eleva-se sozinho) |
 > | Wi-Fi (aplicar) | bloco **"Aplicar o Wi-Fi (eleva-se sozinho)"** logo abaixo — ou abrir PowerShell **como administrador** e correr a linha anterior com `-Aplicar` no fim |
 >
 > Os caminhos acima são **absolutos** (`$env:TEMP\...`) e não têm `.\`: é isso que os torna à
@@ -402,16 +403,34 @@ powercfg /setdcvalueindex SCHEME_CURRENT 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12
 powercfg /setactive SCHEME_CURRENT
 ```
 
-### Passo 4 — Confirmar que valeu a pena
+### Passo 4 — Confirmar que valeu a pena (teste A/B automático)
+
+O `teste-ab-wifi.ps1` faz isto por ti, na mesma sessão: mede **com Wi-Fi**, desliga a Wi-Fi,
+espera que a rota passe para o cabo, mede **outra vez**, volta a ligar a Wi-Fi e mostra os dois
+valores lado a lado. (Recusa-se a correr se não tiveres cabo ligado — precisamente para não te
+deixar sem rede — e volta a ligar a Wi-Fi **mesmo se algo falhar a meio.**)
 
 ```powershell
-Get-NetAdapter -Physical | Format-Table Name, InterfaceDescription, DriverVersion, DriverDate
-powershell -ExecutionPolicy Bypass -File .\medir-velocidade.ps1
+# uma linha: descarrega, desbloqueia e eleva-se a si próprio
+$d = "$env:TEMP\omniroute-kit"; New-Item -ItemType Directory -Path $d -Force | Out-Null
+$f = "$d\teste-ab-wifi.ps1"
+Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/bonesolv1997-eng/OmniRoute/arena/01a0aae0-omniroute/docs/help/pt-PT/teste-ab-wifi.ps1' -OutFile $f
+Unblock-File $f; & $f
 ```
 
-Compara **Wi-Fi ligada** com **Wi-Fi desligada** (cabo): o `medir-velocidade.ps1` mostra qual é
-a rota preferida e a velocidade de cada cenário. Se a diferença não aparecer, o gargalo não
-estava aqui — e isso também é uma resposta útil.
+Como ler o resultado:
+
+| Resultado | Conclusão |
+|---|---|
+| Cabo **< 300 Mbps** | Não é do Wi-Fi: cabo/porta do router, Green Ethernet/Gigabit Lite na NIC Ethernet, ou QoS do router (secções 4b e 5) |
+| Wi-Fi < **50 %** do cabo | O Wi-Fi (AX200) está a limitar — secção 4e (driver 24.20.2.1, 80 vs 160 MHz, antenas, autotuning) |
+| Wi-Fi > **80 %** do cabo | O Wi-Fi não é o problema: se o Steam continua lento, é limite do Steam/QoS/disco (secções 3, 4b e 7) |
+
+Para ver só os valores, sem desligar nada:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\medir-velocidade.ps1"
+```
 
 ### O que **não** faz diferença
 

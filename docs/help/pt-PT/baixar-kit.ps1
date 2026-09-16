@@ -22,6 +22,7 @@ $ficheiros = @(
     'kit.cmd',
     'diagnostico-net-lenta.ps1',
     'medir-velocidade.ps1',
+    'teste-ab-wifi.ps1',
     'desligar-poupanca-wifi.ps1',
     'correr-diagnostico.cmd',
     'README.md',

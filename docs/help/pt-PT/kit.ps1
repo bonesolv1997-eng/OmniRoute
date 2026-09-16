@@ -24,7 +24,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('menu', 'diagnostico', 'velocidade', 'wifi', 'wifi-aplicar', 'wifi-reverter', 'baixar', 'ler')]
+    [ValidateSet('menu', 'diagnostico', 'velocidade', 'ab', 'wifi', 'wifi-aplicar', 'wifi-reverter', 'baixar', 'ler')]
     [string]$Tarefa = 'menu'
 )
 
@@ -33,7 +33,7 @@ $ProgressPreference = 'SilentlyContinue'
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 
 $BASE = 'https://raw.githubusercontent.com/bonesolv1997-eng/OmniRoute/arena/01a0aae0-omniroute/docs/help/pt-PT'
-$SCRIPTS = @('diagnostico-net-lenta.ps1', 'medir-velocidade.ps1', 'desligar-poupanca-wifi.ps1', 'baixar-kit.ps1', 'correr-diagnostico.cmd', 'README.md')
+$SCRIPTS = @('diagnostico-net-lenta.ps1', 'medir-velocidade.ps1', 'teste-ab-wifi.ps1', 'desligar-poupanca-wifi.ps1', 'baixar-kit.ps1', 'correr-diagnostico.cmd', 'kit.cmd', 'README.md')
 
 # Quando corrido via iex, $PSScriptRoot vem vazio: usamos uma pasta fixa em %TEMP%.
 $raiz = if ($PSScriptRoot) { $PSScriptRoot } else { Join-Path $env:TEMP 'omniroute-kit' }
@@ -134,6 +134,7 @@ Escreve-Titulo
 
 if ($Tarefa -eq 'diagnostico') { Correr-Script 'diagnostico-net-lenta.ps1'; return }
 if ($Tarefa -eq 'velocidade') { Correr-Script 'medir-velocidade.ps1'; return }
+if ($Tarefa -eq 'ab') { Correr-Elevado 'teste-ab-wifi.ps1'; return }
 if ($Tarefa -eq 'wifi') { Correr-Script 'desligar-poupanca-wifi.ps1'; return }
 if ($Tarefa -eq 'wifi-aplicar') { Correr-Elevado 'desligar-poupanca-wifi.ps1' @('-Aplicar'); return }
 if ($Tarefa -eq 'wifi-reverter') { Correr-Elevado 'desligar-poupanca-wifi.ps1' @('-Reverter'); return }
@@ -147,10 +148,11 @@ while ($true) {
     Write-Host "   1) Diagnostico completo da rede            (nao altera nada)" -ForegroundColor Gray
     Write-Host "   2) Teste de velocidade rapido (30 s)        (nao altera nada)" -ForegroundColor Gray
     Write-Host "   3) Wi-Fi: ver chip, driver e poupanca       (nao altera nada)" -ForegroundColor Gray
-    Write-Host "   4) Wi-Fi: APLICAR correcoes                 (abre janela admin)" -ForegroundColor Gray
-    Write-Host "   5) Wi-Fi: reverter alteracoes               (abre janela admin)" -ForegroundColor Gray
-    Write-Host "   6) Descarregar/atualizar todos os ficheiros" -ForegroundColor Gray
-    Write-Host "   7) Abrir o guia (README.md)" -ForegroundColor Gray
+    Write-Host "   4) TESTE A/B: Wi-Fi vs cabo                 (desliga a Wi-Fi e volta a ligar)" -ForegroundColor Gray
+    Write-Host "   5) Wi-Fi: APLICAR correcoes                 (abre janela admin)" -ForegroundColor Gray
+    Write-Host "   6) Wi-Fi: reverter alteracoes               (abre janela admin)" -ForegroundColor Gray
+    Write-Host "   7) Descarregar/atualizar todos os ficheiros" -ForegroundColor Gray
+    Write-Host "   8) Abrir o guia (README.md)" -ForegroundColor Gray
     Write-Host "   0) Sair" -ForegroundColor Gray
     Write-Host ""
 
@@ -164,12 +166,13 @@ while ($true) {
         '1' { Correr-Script 'diagnostico-net-lenta.ps1' }
         '2' { Correr-Script 'medir-velocidade.ps1' }
         '3' { Correr-Script 'desligar-poupanca-wifi.ps1' }
-        '4' { Correr-Elevado 'desligar-poupanca-wifi.ps1' @('-Aplicar') }
-        '5' { Correr-Elevado 'desligar-poupanca-wifi.ps1' @('-Reverter') }
-        '6' { Baixar-Tudo }
-        '7' { Abrir-Guia }
+        '4' { Correr-Elevado 'teste-ab-wifi.ps1' }
+        '5' { Correr-Elevado 'desligar-poupanca-wifi.ps1' @('-Aplicar') }
+        '6' { Correr-Elevado 'desligar-poupanca-wifi.ps1' @('-Reverter') }
+        '7' { Baixar-Tudo }
+        '8' { Abrir-Guia }
         '0' { Write-Host ""; Write-Host "  Ate ja. Relatorios ficam na pasta acima." -ForegroundColor DarkCyan; Write-Host ""; return }
-        default { Write-Host "  Escolhe um numero de 0 a 7." -ForegroundColor Yellow; continue }
+        default { Write-Host "  Escolhe um numero de 0 a 8." -ForegroundColor Yellow; continue }
     }
     Pausa
     Escreve-Titulo
